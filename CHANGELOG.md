@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.1
+
+- Completed the German translation of the web UI: 9 remaining English help texts
+  (output resolution, ADC gain, full-height, low-resolution scaling, PAL 50->60 Hz,
+  external clock generator, FrameTime-Lock method)
+- No functional changes
+
 ## v1.0.0
 
 First release of gbs-control-mixed.
