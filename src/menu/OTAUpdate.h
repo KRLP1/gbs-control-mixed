@@ -4,8 +4,8 @@
 #include <Arduino.h>
 
 // GitHub repository configuration
-#define GITHUB_REPO_OWNER "Kwakx"
-#define GITHUB_REPO_NAME "gbs-control-nx"
+#define GITHUB_REPO_OWNER "KRLP1"
+#define GITHUB_REPO_NAME "gbs-control-mixed"
 #define GITHUB_API_HOST "api.github.com"
 #define GITHUB_API_PATH "/repos/" GITHUB_REPO_OWNER "/" GITHUB_REPO_NAME "/releases/latest"
 
