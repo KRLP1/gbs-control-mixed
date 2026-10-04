@@ -24,3 +24,7 @@ const char st_info_string[] PROGMEM =
     "(WiFi): Access 'http://gbsslave:80' or 'http://gbsslave.local' (or device IP) in your browser";
 #endif
 
+String device_hostname = device_hostname_partial; // runtime hostname, loadable from /hostname.txt
+String pendingWifiSSID;
+String pendingWifiPassword;
+

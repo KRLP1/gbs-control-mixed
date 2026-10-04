@@ -692,6 +692,15 @@ void doPostPresetLoadSteps()
     typedef TV5725<GBS_ADDR> GBS;
     //unsigned long postLoadTimer = millis();
 
+    // The preset write has already unlocked the clamp on the way in (writeProgramArrayNew patches
+    // 5_57), and it stays unlocked until the clamp position can be measured near the end of this
+    // function. Everything in between - hundreds of milliseconds of resets and settling delays -
+    // would otherwise be shown with nothing pinning the ADC's back porch, so black drifts upwards
+    // the whole time: the preset load that comes up dim and grows brighter before snapping right.
+    // Hold the output dark for that stretch and switch it back on once the clamp is locked again.
+    // The HD bypass path returns before that point and enables the DAC itself, as it always did.
+    GBS::DAC_RGBS_PWDNZ::write(0);
+
     // adco->r_gain gets applied if uopt->enableAutoGain is set.
     if (uopt->enableAutoGain) {
         if (uopt->presetPreference == OutputCustomized) {
@@ -1363,7 +1372,8 @@ void doPostPresetLoadSteps()
     if (!uopt->wantOutputComponent) {
         GBS::PAD_SYNC_OUT_ENZ::write(0); // enable sync out if needed
     }
-    GBS::DAC_RGBS_PWDNZ::write(1); // DAC on if needed
+    // DAC stays off here now; it is switched on further down once the clamp is locked (see the
+    // early DAC_RGBS_PWDNZ::write(0) at the top of this function)
     GBS::DAC_RGBS_SPD::write(0);   // 0_45 2 DAC_SVM power down disable, somehow less jailbars
     GBS::DAC_RGBS_S0ENZ::write(0); //
     GBS::DAC_RGBS_S1EN::write(1);  // these 2 also help
@@ -1422,13 +1432,23 @@ void doPostPresetLoadSteps()
         }
     }
 
-    // early attempt
-    updateClampPosition();
-    if (rto->clampPositionIsSet) {
-        if (GBS::SP_NO_CLAMP_REG::read() == 1) {
-            GBS::SP_NO_CLAMP_REG::write(0);
+    // Early attempt, and what the output has been held dark for since the top of this function.
+    // A single try this soon after a preset load usually fails - updateClampPosition() wants 16
+    // HPERIOD_IF readings that agree and the PLL is still settling - so give it up to half a
+    // second. Should it not manage even then, the output still comes back and the retries in
+    // the sync watcher take over; that case looks like the old behaviour and nothing worse.
+    for (uint8_t i = 0; i < 25; i++) {
+        updateClampPosition();
+        if (rto->clampPositionIsSet) {
+            break;
         }
+        handleWiFi(0); // wifi stack
+        delay(20);
     }
+    if (rto->clampPositionIsSet && GBS::SP_NO_CLAMP_REG::read() == 1) {
+        GBS::SP_NO_CLAMP_REG::write(0); // lock the clamp before the picture is visible again
+    }
+    GBS::DAC_RGBS_PWDNZ::write(1); // output back on, with black now being black
 
     updateSpDynamic(0);
 

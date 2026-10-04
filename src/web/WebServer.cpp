@@ -14,11 +14,32 @@
 #else
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <esp_system.h>
 #include <ESPmDNS.h>
 #endif
 
 // Empty string for WiFi.begin() when no password
 static const String emptyWiFiPassword = "";
+
+// Scratch buffer for the slot metadata file, used by the web handlers that read or rewrite it.
+// At SLOTS_TOTAL entries this is 2304 bytes: far too much for the stack of an async web handler on
+// this part, and too much to hold onto permanently either - the websocket log stands down when
+// free heap runs low, and 2.3k is the whole margin on a board that idles near that line. So it
+// lives only for as long as a handler is working with it. The handlers never overlap:
+// ESPAsyncWebServer dispatches them one at a time from the network stack.
+static SlotMetaArray *slotsObject = nullptr;
+
+// Holds the slot scratch buffer for the enclosing scope. Declare one at the top of a handler and
+// check ok() before touching slotsObject; the buffer is released however the handler returns.
+struct SlotsScratch {
+    SlotsScratch() { slotsObject = new SlotMetaArray(); }
+    ~SlotsScratch()
+    {
+        delete slotsObject;
+        slotsObject = nullptr;
+    }
+    bool ok() const { return slotsObject != nullptr; }
+};
 
 void startWebserver()
 {
@@ -27,22 +48,22 @@ void startWebserver()
         SerialM.print(F("(WiFi): STA mode connected; IP: "));
         SerialM.println(WiFi.localIP().toString());
 #ifdef ESP8266
-        if (MDNS.begin(device_hostname_partial, WiFi.localIP())) { // MDNS request for gbscontrol.local
+        if (MDNS.begin(device_hostname.c_str(), WiFi.localIP())) { // MDNS request for <hostname>.local
             //Serial.println("MDNS started");
             MDNS.addService("http", "tcp", 80); // Add service to MDNS-SD
             MDNS.announce();
         }
 #else
-        if (MDNS.begin(device_hostname_partial)) { // MDNS request for gbscontrol.local
+        if (MDNS.begin(device_hostname.c_str())) { // MDNS request for <hostname>.local
             //Serial.println("MDNS started");
             MDNS.addService("http", "tcp", 80); // Add service to MDNS-SD
             // MDNS.announce(); // Not needed on ESP32
         }
 #endif
-        SerialM.println(FPSTR(st_info_string));
+        SerialM.println("(WiFi): Access 'http://" + device_hostname + ":80' or 'http://" + device_hostname + ".local' (or device IP) in your browser");
     });
     persWM.onAp([]() {
-        SerialM.println(FPSTR(ap_info_string));
+        SerialM.println("(WiFi): AP mode (SSID: " + String(ap_ssid) + ", pass 'qqqqqqqq'): Access 'http://" + device_hostname + ".local' in your browser");
         // add mdns announce here as well?
     });
 
@@ -140,12 +161,14 @@ void startWebserver()
             SerialM.println("Saved WiFi creds to NVS (ESP32) - Safe Method");
 #else
             // ESP8266 logic
-            if (pass.length()) { // p holds password
-                // false = only save credentials, don't connect
-                WiFi.begin(ssid.c_str(), pass.c_str(), 0, 0, false);
-            } else {
-                WiFi.begin(ssid.c_str(), emptyWiFiPassword.c_str(), 0, 0, false);
-            }
+            // Backported from JuergenLeber/gbs-control: don't call WiFi.begin() here - it invokes
+            // WiFi.mode(WIFI_STA) from within this lwIP/AsyncTCP callback while the response for
+            // this very request is still being sent, which can tear down the AP and crash. Defer
+            // the actual connect + persist to the main loop instead (see UserCommandHandler.cpp,
+            // case 'u'), using the SDK's flash-writing calls there so persistence doesn't depend
+            // on WiFi.persistent()/WiFi.begin() timing.
+            pendingWifiSSID = ssid;
+            pendingWifiPassword = pass.length() ? pass : emptyWiFiPassword;
 #endif
         } else {
             WiFi.begin();
@@ -161,23 +184,26 @@ void startWebserver()
 
     server.on("/bin/slots.bin", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (ESP.getFreeHeap() > 10000) {
-            SlotMetaArray slotsObject;
+            SlotsScratch scratch;
+            if (!scratch.ok()) {
+                request->send(200, "application/json", "false");
+                return;
+            }
             File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
 
             if (!slotsBinaryFileRead) {
                 File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
                 for (int i = 0; i < SLOTS_TOTAL; i++) {
-                    slotsObject.slot[i].slot = i;
-                    slotsObject.slot[i].presetID = 0;
-                    slotsObject.slot[i].scanlines = 0;
-                    slotsObject.slot[i].scanlinesStrength = 0;
-                    slotsObject.slot[i].wantVdsLineFilter = false;
-                    slotsObject.slot[i].wantStepResponse = true;
-                    slotsObject.slot[i].wantPeaking = true;
-                    char emptySlotName[25] = "Empty                   ";
-                    strncpy(slotsObject.slot[i].name, emptySlotName, 25);
+                    slotsObject->slot[i].slot = i;
+                    slotsObject->slot[i].presetID = 0;
+                    slotsObject->slot[i].scanlines = 0;
+                    slotsObject->slot[i].scanlinesStrength = 0;
+                    slotsObject->slot[i].wantVdsLineFilter = false;
+                    slotsObject->slot[i].wantStepResponse = true;
+                    slotsObject->slot[i].wantPeaking = true;
+                    strncpy(slotsObject->slot[i].name, EMPTY_SLOT_NAME, 25);
                 }
-                slotsBinaryFileWrite.write((byte *)&slotsObject, sizeof(slotsObject));
+                slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
                 slotsBinaryFileWrite.close();
             } else {
                 slotsBinaryFileRead.close();
@@ -215,28 +241,38 @@ void startWebserver()
             int params = request->params();
 
             if (params > 0) {
-                SlotMetaArray slotsObject;
+                SlotsScratch scratch;
+                if (!scratch.ok()) {
+                    request->send(200, "application/json", "false");
+                    return;
+                }
                 File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
-
+                size_t slotsRead = slotsBinaryFileRead
+                    ? slotsBinaryFileRead.read((byte *)slotsObject, sizeof(*slotsObject))
+                    : 0;
                 if (slotsBinaryFileRead) {
-                    slotsBinaryFileRead.read((byte *)&slotsObject, sizeof(slotsObject));
                     slotsBinaryFileRead.close();
-                } else {
+                }
+
+                // A file that is missing, truncated or written by a build with a different
+                // SLOTS_TOTAL leaves part of slotsObject as stack garbage - and the whole struct
+                // is written back below, so that garbage would become the new slot file.
+                // Rebuild from scratch rather than persisting it.
+                if (slotsRead != sizeof(*slotsObject)) {
                     File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
 
                     for (int i = 0; i < SLOTS_TOTAL; i++) {
-                        slotsObject.slot[i].slot = i;
-                        slotsObject.slot[i].presetID = 0;
-                        slotsObject.slot[i].scanlines = 0;
-                        slotsObject.slot[i].scanlinesStrength = 0;
-                        slotsObject.slot[i].wantVdsLineFilter = false;
-                        slotsObject.slot[i].wantStepResponse = true;
-                        slotsObject.slot[i].wantPeaking = true;
-                        char emptySlotName[25] = "Empty                   ";
-                        strncpy(slotsObject.slot[i].name, emptySlotName, 25);
+                        slotsObject->slot[i].slot = i;
+                        slotsObject->slot[i].presetID = 0;
+                        slotsObject->slot[i].scanlines = 0;
+                        slotsObject->slot[i].scanlinesStrength = 0;
+                        slotsObject->slot[i].wantVdsLineFilter = false;
+                        slotsObject->slot[i].wantStepResponse = true;
+                        slotsObject->slot[i].wantPeaking = true;
+                        strncpy(slotsObject->slot[i].name, EMPTY_SLOT_NAME, 25);
                     }
 
-                    slotsBinaryFileWrite.write((byte *)&slotsObject, sizeof(slotsObject));
+                    slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
                     slotsBinaryFileWrite.close();
                 }
 
@@ -253,19 +289,19 @@ void startWebserver()
                 String slotName = slotNameParam->value();
 
                 char emptySlotName[25] = "                        ";
-                strncpy(slotsObject.slot[slotIndex].name, emptySlotName, 25);
+                strncpy(slotsObject->slot[slotIndex].name, emptySlotName, 25);
 
-                slotsObject.slot[slotIndex].slot = slotIndex;
-                slotName.toCharArray(slotsObject.slot[slotIndex].name, sizeof(slotsObject.slot[slotIndex].name));
-                slotsObject.slot[slotIndex].presetID = rto->presetID;
-                slotsObject.slot[slotIndex].scanlines = uopt->wantScanlines;
-                slotsObject.slot[slotIndex].scanlinesStrength = uopt->scanlineStrength;
-                slotsObject.slot[slotIndex].wantVdsLineFilter = uopt->wantVdsLineFilter;
-                slotsObject.slot[slotIndex].wantStepResponse = uopt->wantStepResponse;
-                slotsObject.slot[slotIndex].wantPeaking = uopt->wantPeaking;
+                slotsObject->slot[slotIndex].slot = slotIndex;
+                slotName.toCharArray(slotsObject->slot[slotIndex].name, sizeof(slotsObject->slot[slotIndex].name));
+                slotsObject->slot[slotIndex].presetID = rto->presetID;
+                slotsObject->slot[slotIndex].scanlines = uopt->wantScanlines;
+                slotsObject->slot[slotIndex].scanlinesStrength = uopt->scanlineStrength;
+                slotsObject->slot[slotIndex].wantVdsLineFilter = uopt->wantVdsLineFilter;
+                slotsObject->slot[slotIndex].wantStepResponse = uopt->wantStepResponse;
+                slotsObject->slot[slotIndex].wantPeaking = uopt->wantPeaking;
 
                 File slotsBinaryOutputFile = LittleFS.open(SLOTS_FILE, "w");
-                slotsBinaryOutputFile.write((byte *)&slotsObject, sizeof(slotsObject));
+                slotsBinaryOutputFile.write((byte *)slotsObject, sizeof(*slotsObject));
                 slotsBinaryOutputFile.close();
 
                 result = true;
@@ -279,10 +315,10 @@ void startWebserver()
     server.on("/slot/remove", HTTP_GET, [](AsyncWebServerRequest *request) {
         bool result = false;
         int params = request->params();
-        const AsyncWebParameter *p = request->getParam(0);
-        char param = p->name().charAt(0);
         if (params > 0)
         {
+            const AsyncWebParameter *p = request->getParam(0); // only valid once params > 0
+            char param = p->name().charAt(0);
             if (param == '0')
             {
                 SerialM.println("Wait...");
@@ -294,11 +330,24 @@ void startWebserver()
                 Ascii8 nextSlot;
                 auto currentSlot = slotIndexMap.indexOf(slot);
 
-                SlotMetaArray slotsObject;
                 File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
-                slotsBinaryFileRead.read((byte *)&slotsObject, sizeof(slotsObject));
-                slotsBinaryFileRead.close();
-                String slotName = slotsObject.slot[currentSlot].name;
+                size_t slotsRead = slotsBinaryFileRead
+                    ? slotsBinaryFileRead.read((byte *)slotsObject, sizeof(*slotsObject))
+                    : 0;
+                if (slotsBinaryFileRead) {
+                    slotsBinaryFileRead.close();
+                }
+
+                // currentSlot is -1 whenever presetSlot holds anything that is not a slot
+                // character, and a missing or short file leaves slotsObject as stack garbage,
+                // which the write at the end of this handler would persist as the new slot file.
+                if (currentSlot < 0 || slotsRead != sizeof(*slotsObject)) {
+                    SerialM.println(F("slot remove: slot data unreadable, aborting"));
+                    request->send(200, "application/json", "false");
+                    return;
+                }
+
+                String slotName = slotsObject->slot[currentSlot].name;
 
                 // remove preset files
                 LittleFS.remove("/preset_ntsc." + String((char)slot));
@@ -313,7 +362,9 @@ void startWebserver()
 
                 uint8_t loopCount = 0;
                 uint8_t flag = 1;
-                while (flag != 0)
+                // shifting the remaining slots down reads one entry ahead, so it has to stop
+                // before that read leaves the array - slot[] holds SLOTS_TOTAL entries
+                while (flag != 0 && (currentSlot + loopCount + 1) < SLOTS_TOTAL)
                 {
                     slot = slotIndexMap[currentSlot + loopCount];
                     nextSlot = slotIndexMap[currentSlot + loopCount + 1];
@@ -328,20 +379,20 @@ void startWebserver()
                     flag += LittleFS.rename("/preset_vga_upscale." + String((char)(nextSlot)), "/preset_vga_upscale." + String((char)slot));
                     flag += LittleFS.rename("/preset_unknown." + String((char)(nextSlot)), "/preset_unknown." + String((char)slot));
 
-                    slotsObject.slot[currentSlot + loopCount].slot = slotsObject.slot[currentSlot + loopCount + 1].slot;
-                    slotsObject.slot[currentSlot + loopCount].presetID = slotsObject.slot[currentSlot + loopCount + 1].presetID;
-                    slotsObject.slot[currentSlot + loopCount].scanlines = slotsObject.slot[currentSlot + loopCount + 1].scanlines;
-                    slotsObject.slot[currentSlot + loopCount].scanlinesStrength = slotsObject.slot[currentSlot + loopCount + 1].scanlinesStrength;
-                    slotsObject.slot[currentSlot + loopCount].wantVdsLineFilter = slotsObject.slot[currentSlot + loopCount + 1].wantVdsLineFilter;
-                    slotsObject.slot[currentSlot + loopCount].wantStepResponse = slotsObject.slot[currentSlot + loopCount + 1].wantStepResponse;
-                    slotsObject.slot[currentSlot + loopCount].wantPeaking = slotsObject.slot[currentSlot + loopCount + 1].wantPeaking;
-                    // slotsObject.slot[currentSlot + loopCount].name = slotsObject.slot[currentSlot + loopCount + 1].name;
-                    strncpy(slotsObject.slot[currentSlot + loopCount].name, slotsObject.slot[currentSlot + loopCount + 1].name, 25);
+                    slotsObject->slot[currentSlot + loopCount].slot = slotsObject->slot[currentSlot + loopCount + 1].slot;
+                    slotsObject->slot[currentSlot + loopCount].presetID = slotsObject->slot[currentSlot + loopCount + 1].presetID;
+                    slotsObject->slot[currentSlot + loopCount].scanlines = slotsObject->slot[currentSlot + loopCount + 1].scanlines;
+                    slotsObject->slot[currentSlot + loopCount].scanlinesStrength = slotsObject->slot[currentSlot + loopCount + 1].scanlinesStrength;
+                    slotsObject->slot[currentSlot + loopCount].wantVdsLineFilter = slotsObject->slot[currentSlot + loopCount + 1].wantVdsLineFilter;
+                    slotsObject->slot[currentSlot + loopCount].wantStepResponse = slotsObject->slot[currentSlot + loopCount + 1].wantStepResponse;
+                    slotsObject->slot[currentSlot + loopCount].wantPeaking = slotsObject->slot[currentSlot + loopCount + 1].wantPeaking;
+                    // slotsObject->slot[currentSlot + loopCount].name = slotsObject->slot[currentSlot + loopCount + 1].name;
+                    strncpy(slotsObject->slot[currentSlot + loopCount].name, slotsObject->slot[currentSlot + loopCount + 1].name, 25);
                     loopCount++;
                 }
 
                 File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
-                slotsBinaryFileWrite.write((byte *)&slotsObject, sizeof(slotsObject));
+                slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
                 slotsBinaryFileWrite.close();
                 SerialM.println("Preset \"" + slotName + "\" removed");
                 result = true;
@@ -445,19 +496,88 @@ void startWebserver()
         request->send(200, "application/json", wifiMode == WIFI_AP ? "{\"mode\":\"ap\"}" : "{\"mode\":\"sta\",\"ssid\":\"" + WiFi.SSID() + "\"}");
     });
 
+    server.on("/hostname/get", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", "{\"hostname\":\"" + device_hostname + "\"}");
+    });
+
+    server.on("/hostname/set", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (request->hasParam("h", true)) {
+            String hn = request->getParam("h", true)->value();
+            hn.trim();
+            bool valid = hn.length() > 0 && hn.length() <= 32;
+            for (size_t i = 0; i < hn.length() && valid; i++) {
+                char c = hn.charAt(i);
+                if (!isAlphaNumeric(c) && c != '-') valid = false;
+            }
+            if (valid && hn.charAt(0) != '-' && hn.charAt(hn.length() - 1) != '-') {
+                File fh = LittleFS.open("/hostname.txt", "w");
+                if (fh) {
+                    fh.print(hn);
+                    fh.close();
+                    device_hostname = hn;
+                }
+                request->send(200, "application/json", "{\"hostname\":\"" + hn + "\"}");
+                userCommand = 'a'; // restart
+                return;
+            }
+        }
+        request->send(400, "application/json", "{\"error\":\"invalid hostname\"}");
+    });
+
+    // Deliberately without the free heap check the other handlers use: this is what is left to
+    // read when the heap is the problem. The websocket log stands down below 10k free (see
+    // SerialMirror), which empties the debug window, and this stays reachable below that.
+    server.on("/status/get", HTTP_GET, [](AsyncWebServerRequest *request) {
+        char buf[224];
+#ifdef ESP8266
+        snprintf_P(buf, sizeof(buf),
+            PSTR("{\"heap\":%u,\"heapFrag\":%u,\"maxBlock\":%u,\"uptime\":%lu,\"wsClients\":%d,\"resetReason\":\"%s\"}"),
+            ESP.getFreeHeap(), ESP.getHeapFragmentation(), ESP.getMaxFreeBlockSize(),
+            millis() / 1000, webSocket.connectedClients(), ESP.getResetReason().c_str());
+#else
+        // ESP32's EspClass has no getHeapFragmentation()/getMaxFreeBlockSize()/getResetReason()
+        // equivalents in the Arduino core; report what the IDF heap allocator and reset-reason
+        // API give us instead so this endpoint stays available on both platforms.
+        esp_reset_reason_t resetReason = esp_reset_reason();
+        const char *resetReasonStr = "UNKNOWN";
+        switch (resetReason) {
+            case ESP_RST_POWERON:   resetReasonStr = "POWERON"; break;
+            case ESP_RST_SW:        resetReasonStr = "SW"; break;
+            case ESP_RST_PANIC:     resetReasonStr = "PANIC"; break;
+            case ESP_RST_INT_WDT:   resetReasonStr = "INT_WDT"; break;
+            case ESP_RST_TASK_WDT:  resetReasonStr = "TASK_WDT"; break;
+            case ESP_RST_WDT:       resetReasonStr = "WDT"; break;
+            case ESP_RST_BROWNOUT:  resetReasonStr = "BROWNOUT"; break;
+            default: break;
+        }
+        snprintf_P(buf, sizeof(buf),
+            PSTR("{\"heap\":%u,\"heapFrag\":%u,\"maxBlock\":%u,\"uptime\":%lu,\"wsClients\":%d,\"resetReason\":\"%s\"}"),
+            (unsigned)ESP.getFreeHeap(), (unsigned)0, (unsigned)ESP.getMaxAllocHeap(),
+            millis() / 1000, webSocket.connectedClients(), resetReasonStr);
+#endif
+        request->send(200, "application/json", buf);
+    });
+
     server.on("/gbs/restore-filters", HTTP_GET, [](AsyncWebServerRequest *request) {
-        SlotMetaArray slotsObject;
-        File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
+        SlotsScratch scratch; // declared before the gotos so they cannot skip its construction
         bool result = false;
+        if (!scratch.ok()) {
+            goto fail;
+        }
+        {
+        File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
         if (slotsBinaryFileRead) {
-            slotsBinaryFileRead.read((byte *)&slotsObject, sizeof(slotsObject));
+            size_t slotsRead = slotsBinaryFileRead.read((byte *)slotsObject, sizeof(*slotsObject));
             slotsBinaryFileRead.close();
+            if (slotsRead != sizeof(*slotsObject)) {
+                goto fail; // short file, the rest of slotsObject was never filled in
+            }
             auto currentSlot = slotIndexMap.indexOf(uopt->presetSlot);
             if (currentSlot == -1) {
                 goto fail;
             }
 
-            uopt->wantScanlines = slotsObject.slot[currentSlot].scanlines;
+            uopt->wantScanlines = slotsObject->slot[currentSlot].scanlines;
 
             SerialM.print(F("slot: "));
             SerialM.println(uopt->presetSlot);
@@ -470,11 +590,12 @@ void startWebserver()
             }
             saveUserPrefs();
 
-            uopt->scanlineStrength = slotsObject.slot[currentSlot].scanlinesStrength;
-            uopt->wantVdsLineFilter = slotsObject.slot[currentSlot].wantVdsLineFilter;
-            uopt->wantStepResponse = slotsObject.slot[currentSlot].wantStepResponse;
-            uopt->wantPeaking = slotsObject.slot[currentSlot].wantPeaking;
+            uopt->scanlineStrength = slotsObject->slot[currentSlot].scanlinesStrength;
+            uopt->wantVdsLineFilter = slotsObject->slot[currentSlot].wantVdsLineFilter;
+            uopt->wantStepResponse = slotsObject->slot[currentSlot].wantStepResponse;
+            uopt->wantPeaking = slotsObject->slot[currentSlot].wantPeaking;
             result = true;
+        }
         }
 
         fail:

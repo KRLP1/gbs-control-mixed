@@ -544,7 +544,7 @@ section[name="alert"] {
   width: 100%;
 }
 
-.gbs-button[gbs-name="Empty"] ~ .gbs-button[gbs-name="Empty"] {
+.gbs-button[gbs-name="Leer"] ~ .gbs-button[gbs-name="Leer"] {
   display: none;
 }
 

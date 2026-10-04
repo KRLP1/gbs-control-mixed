@@ -275,6 +275,21 @@ void runSyncWatcher()
     static uint16_t activeStableLineCount = 0;
     static unsigned long lastSyncDrop = millis();
     static unsigned long lastLineCountMeasure = millis();
+    // Backported from JuergenLeber/gbs-control: counts consecutive "no signal" probes that find
+    // the source completely inactive.
+    static uint8_t sourceGoneProbeCount = 0;
+    // set once the MD unit has named a mode for the source that is currently attached, cleared by
+    // the teardown below. Tells a source that never classified apart from one that classified
+    // fine and is only glitching, which read identically to Block 2 below in a single pass.
+    static boolean sourceWasClassified = false;
+    // counts consecutive passes with an unknown mode while sync is active, and the latch it sets.
+    // At function scope so the discrete VSync retry (Block 2) can drop the latch when it
+    // reclassifies the source, and so the teardown can clear it for the next one.
+    static uint8_t modeUnknownCounter = 0;
+    static boolean crtcTimingHold = false;
+    // Backported from JuergenLeber/gbs-control: one shot guard for the fallback preset used on a
+    // source the MD unit has no profile for at all (see noSyncCounter == 38 below).
+    static boolean fallbackPresetTried = false;
 
     uint16_t thisStableLineCount = 0;
     uint8_t detectedVideoMode = getVideoMode();
@@ -396,7 +411,137 @@ void runSyncWatcher()
         }
     }
 
-    if ((detectedVideoMode == 0 || !status16SpHsStable) && rto->videoStandardInput != 15) {
+    // Once a mode is set, rely on HSACT (not IF mode bits) for sync loss detection.
+    // IF mode bits transiently clear during vsync when vsync extraction from csync isn't working.
+    boolean rawSyncLoss = !status16SpHsStable ||
+        (detectedVideoMode == 0 && rto->videoStandardInput == 0);
+
+    // Debounce the HSACT-based sync loss on established SD/HD modes. getStatus16SpHsStable() is a
+    // single un-debounced read of the HS-active flag, and on dark / near-black content (where
+    // sync-on-green is marginal) that flag flickers for a frame. A single flaky read would flip
+    // genuineSyncLoss true, which resets continousStableCounter, bumps noSyncCounter, freezes, and
+    // makes the recovery ramp re-run optimizePhaseSP() — the sampling-phase shift shows up as
+    // pixels / artefacts jumping around. Requiring a few consecutive bad reads rides out the glitch.
+    // Only debounce for SP-driven modes (1..13); during mode search (0) and RGBHV (14/15) react
+    // immediately as before.
+    static uint8_t syncLossDebounce = 0;
+    boolean genuineSyncLoss;
+    if (rto->videoStandardInput >= 1 && rto->videoStandardInput <= 13) {
+        if (rawSyncLoss) {
+            if (syncLossDebounce < 255)
+                syncLossDebounce++;
+        } else {
+            syncLossDebounce = 0;
+        }
+        genuineSyncLoss = (syncLossDebounce >= 3);
+    } else {
+        syncLossDebounce = 0;
+        genuineSyncLoss = rawSyncLoss;
+    }
+
+    // --- Backported from JuergenLeber/gbs-control, as an ADDITIVE safeguard only. ---
+    // Kwakx keeps deciding csync vs. discrete sync via GBS::SP_SOG_MODE (see the format-change
+    // branch below and GBSSync.cpp) - that is left untouched. The two blocks below only add extra
+    // handling for cases where that register-based classification alone is not enough, before
+    // falling through to the noSyncCounter escalation below (which now runs on this file's own
+    // genuineSyncLoss, debounced above, rather than Leber's raw condition - see that block for why
+    // the csync-SD exemption Leber added there is subsumed by genuineSyncLoss already).
+
+    // Block 2 (checked first - see note below): a source with separate H/V sync that
+    // GBS::SP_SOG_MODE nonetheless classified as csync stays horizontally locked with the picture
+    // rolling and mode never resolving (HV input gated off, vertical free running).
+    // probeDiscreteVSync() can tell the two apart once H has locked, so retry here periodically
+    // once the timing has settled.
+    //
+    // Must run before Block 1 (CRTC timing hold): that block returns early for as long as the
+    // mode reads unknown, and a source misjudged as CSync reads unknown forever - so checked
+    // second, this retry would never get a turn.
+    //
+    // A source that never classified is retried quickly. One that did and then dropped to mode 0
+    // is usually just glitching - 15kHz CSync sources do that routinely - and probing them is
+    // actively harmful: the probe turns SOG slicing off for a third of a second, which for a
+    // source whose sync only arrives that way is itself a sync dropout. So a previously-classified
+    // source has to hold mode 0 far longer (~30s) before it's worth disturbing. Excluding it
+    // outright, as an earlier version of this safeguard did, leaves no way back at all: an Atari
+    // ST that boots in a colour mode and then switches itself to 71Hz mono - which the MD unit has
+    // no profile for - would latch "classified" for good, with picture rolling and no recovery
+    // short of a full teardown.
+    {
+        static uint16_t noModeWithCsyncCounter = 0;
+
+        if (detectedVideoMode > 0) {
+            sourceWasClassified = true;
+        }
+
+        if (status16SpHsStable && rto->syncTypeCsync && detectedVideoMode == 0 &&
+            rto->videoStandardInput > 0 && rto->videoStandardInput < 14) {
+            // syncwatcher runs roughly every 20ms: ~3s retry for a source that never classified,
+            // ~30s for one that did and is presumably just glitching.
+            uint16_t retryAfter = sourceWasClassified ? 1500 : 150;
+            if (++noModeWithCsyncCounter >= retryAfter) {
+                noModeWithCsyncCounter = 0;
+                if (probeDiscreteVSync(NULL)) {
+                    SerialM.println(F("CSync assumed, but source has discrete VSync > RGB/HV"));
+                    rto->syncTypeCsync = false;
+                    // the source is about to be driven from its own HV pins, so whatever Block 1
+                    // latched while it was free running no longer describes anything - left set
+                    // it would return early on every pass through mode 15 as well.
+                    crtcTimingHold = false;
+                    modeUnknownCounter = 0;
+                    rto->videoStandardInput = 15;
+                    applyPresets(rto->videoStandardInput);
+                    delay(300);
+                    return;
+                }
+            }
+        } else {
+            noModeWithCsyncCounter = 0;
+        }
+    }
+
+    // Block 1: Detect CRTC timing changes (e.g. non-standard horizontal total) that confuse mode
+    // detection while keeping HSACT active - e.g. Amstrad/Schneider CPC PAL, whose long lines
+    // overflow the chip's 12-bit HTOTAL register. MODE then reads 0 while HSync stays active -
+    // left alone, the escalation below would run, apply a wrong preset, and corrupt the picture
+    // for as long as the anomaly lasts.
+    // Guard with htotal: during a normal transient mode=0 (vsync extraction glitch on csync) the
+    // PLLAD stays locked so htotal stays near its expected value; during a real CRTC timing change
+    // the 12-bit register overflows and reads garbage (e.g. 9 for CPC PAL's 3x-longer lines).
+    // Do NOT freeze — by the time we detect the anomaly the frame buffer is already corrupted.
+    // Do NOT funnel into genuineSyncLoss — that triggers noSyncCounter escalation, updateSpDynamic,
+    // and ultimately a wrong preset being applied.
+    // Instead: block all recovery machinery while the anomaly lasts, then on restore trigger a
+    // targeted framesync + phase reset so the GBS re-locks cleanly to the reverted timing.
+    {
+        if (crtcTimingHold) {
+            if (!genuineSyncLoss && detectedVideoMode == 0) {
+                return; // mode still unknown: skip all recovery machinery
+            }
+            // Mode returned to a valid value (or genuine sync loss) — fall through to normal handling
+            crtcTimingHold = false;
+            modeUnknownCounter = 0;
+            if (!genuineSyncLoss) {
+                SerialM.println(F("CRTC timing restored"));
+                rto->phaseIsSet = 0;
+                FrameSync::resetWithoutRecalculation();
+            }
+        }
+
+        if (!genuineSyncLoss && !crtcTimingHold && detectedVideoMode == 0 &&
+            rto->videoStandardInput > 0 && rto->videoStandardInput < 14 &&
+            GBS::STATUS_SYNC_PROC_HTOTAL::read() < 100) {
+            if (++modeUnknownCounter >= 5) {
+                SerialM.println(F("\nmode unknown while sync active (CRTC timing change?)"));
+                crtcTimingHold = true;
+                modeUnknownCounter = 0;
+                return; // skip recovery machinery for this iteration
+            }
+        } else if (!crtcTimingHold) {
+            modeUnknownCounter = 0;
+        }
+    }
+
+    if (genuineSyncLoss && rto->videoStandardInput != 15) {
         rto->noSyncCounter++;
         rto->continousStableCounter = 0;
         lastVsyncLock = millis(); // best reset this
@@ -447,7 +592,7 @@ void runSyncWatcher()
                 GBS::SP_POST_COAST::write(9);
                 // new: test SD<>EDTV changes
                 uint8_t ignore = GBS::SP_H_PULSE_IGNOR::read();
-                if (ignore >= 0x33) {
+                if (ignore >= 0x33 && !rto->syncTypeCsync) {
                     GBS::SP_H_PULSE_IGNOR::write(ignore / 2);
                 }
             }
@@ -475,6 +620,47 @@ void runSyncWatcher()
 
         if (rto->noSyncCounter == 38) {
             nudgeMD();
+        }
+
+        // Backported from JuergenLeber/gbs-control. HSync is solidly present but no video mode was
+        // ever recognised. Nothing has applied a preset, so the PLL never locks, and that's a dead
+        // end in both directions: the format-change branch needs a detected mode before it runs,
+        // and probeDiscreteVSync() needs H lock before it can answer. Left alone the source stays
+        // here indefinitely. Load the fallback preset once to establish lock and let the normal
+        // machinery continue. Reached by anything the MD unit has no profile for, e.g. Atari ST
+        // high res at 35.7kHz.
+        // 200, not the round 300 the rest of this scale might suggest: Block 2 further up (the
+        // discrete VSync retry) is the last thing that can still make the MD unit name this source
+        // - it resets the sync processor and the mode detect unit and re-optimizes the SOG level.
+        // Sitting out another 100 passes after that has had a full second to bear fruit only adds
+        // to the time the screen stays dark. Firing early is cheap even when it's wrong: the
+        // format-change branch replaces the fallback preset as soon as a real mode does turn up.
+        if (rto->noSyncCounter >= 200 && !fallbackPresetTried && rto->videoStandardInput == 0 &&
+            GBS::STATUS_SYNC_PROC_HSACT::read() == 1) {
+            fallbackPresetTried = true;
+            SerialM.println(F("\nHSync present but no mode found, applying fallback preset"));
+            rto->noSyncCounter = 0;
+            applyPresets(0); // overrides to 480p60 and re-checks the sync type
+            delay(300);
+
+            // The preset has just given the PLL the H lock that probeDiscreteVSync() needs, and
+            // this is the one place that knows a probe is worth taking right now: HSync solid, no
+            // mode, a preset freshly applied, nothing else pending. The sync type applyPresets()
+            // decided a moment ago cannot be trusted - it probed before this preset existed, with
+            // no lock, where the answer can only ever be "none". Asking again here saves the ~3s
+            // the periodic retry above would otherwise spend rediscovering the same thing. A
+            // source that really is CSync answers "none" and loses only the probe's own third of
+            // a second, and the periodic retry still covers the case where the lock needs longer.
+            if (rto->syncTypeCsync && probeDiscreteVSync(NULL)) {
+                SerialM.println(F("fallback preset locked, source has discrete VSync > RGB/HV"));
+                rto->syncTypeCsync = false;
+                crtcTimingHold = false;
+                modeUnknownCounter = 0;
+                rto->videoStandardInput = 15;
+                applyPresets(rto->videoStandardInput);
+                delay(300);
+            }
+            return;
         }
 
         if (rto->syncTypeCsync) {
@@ -507,6 +693,11 @@ void runSyncWatcher()
             GBS::SP_H_CST_SP::write(0x100); // instead of disabling 5_3e 5 coast
             GBS::SP_CS_CLP_ST::write(32);   // neutral clamp values
             GBS::SP_CS_CLP_SP::write(48);   //
+            // ... which the flag has to follow. Left set, it claims the clamp is positioned while
+            // the registers say otherwise, and the retry in doPostPresetLoadSteps()/runSyncWatcher
+            // only runs while it is clear - so a returning source gets its picture back with this
+            // neutral window still in place, and keeps it until the next occasional refresh.
+            rto->clampPositionIsSet = false;
             updateSpDynamic(1);
             nudgeMD(); // can fix MD not noticing a line count update
             delay(80);
@@ -518,9 +709,11 @@ void runSyncWatcher()
                 // exception: we're in startup and pllad isn't locked yet > HLOW_LEN always 0
                 hlowStart = 777; // now it'll run optimizeSogLevel if needed
             }
+            boolean sourceStillActive = false;
             for (int a = 0; a < 128; a++) {
                 if (GBS::STATUS_SYNC_PROC_HLOW_LEN::read() != hlowStart) {
                     // source still there
+                    sourceStillActive = true;
                     if (rto->noSyncCounter % 450 == 0) {
                         rto->currentLevelSOG = 0; // worst case, sometimes necessary, will be unstable but at least detect
                         setAndUpdateSogLevel(rto->currentLevelSOG);
@@ -534,6 +727,32 @@ void runSyncWatcher()
                     setAndUpdateSogLevel(rto->currentLevelSOG);
                 }
                 delay(0);
+            }
+
+            // The HLOW_LEN probe above found no source activity at all. freezeVideo() only stops
+            // capture — it keeps the last (frequently corrupted) frame on the DAC output, so when
+            // the source is simply switched off that garbage frame stays on screen indefinitely.
+            // Require two consecutive probes to agree the source is gone (guards against a single
+            // momentarily-static HLOW_LEN reading), then just blank the DAC so nothing is shown.
+            // Do NOT tear down to low power / reset parameters here: that wipes videoStandardInput
+            // and the tuned SOG/sync config, forcing a slow full re-detection when the source comes
+            // back. Keeping the config lets the normal recovery path re-lock in place quickly; the
+            // DAC is re-enabled again in the "mode stable again" branch below.
+            if (sourceStillActive) {
+                sourceGoneProbeCount = 0;
+            } else if (sourceGoneProbeCount < 255) {
+                sourceGoneProbeCount++;
+            }
+            if (sourceGoneProbeCount >= 2 && GBS::DAC_RGBS_PWDNZ::read() == 1) {
+                SerialM.println(F("source gone, blanking output"));
+                GBS::DAC_RGBS_PWDNZ::write(0); // black output instead of a frozen garbage frame
+                // Blanking alone leaves sync going out, so the display sits there showing black
+                // rather than dropping into standby - for the ~40s until the teardown at 0x07fe
+                // stops it. Nothing is being displayed anyway, so stop sync too and let the
+                // display power down. Both come back together in the "stable again" branch below.
+                if (!uopt->wantOutputComponent) {
+                    GBS::PAD_SYNC_OUT_ENZ::write(1); // disable sync out
+                }
             }
 
             resetSyncProcessor();
@@ -668,7 +887,20 @@ void runSyncWatcher()
                 }
             }
         }
-    } else if (getStatus16SpHsStable() && detectedVideoMode != 0 && rto->videoStandardInput != 15 && (rto->videoStandardInput == detectedVideoMode)) {
+    // The second term is the same exception updateClampPosition() makes: the MD unit's mode bits
+    // stay 0 for some csync SD sources however long they run, so requiring a named mode here means
+    // continousStableCounter never leaves 0 for them. Everything that waits on that counter then
+    // never happens - the clamp retry at 4, autoBestHtotal at 10, frame time lock at 20, the post
+    // preset stage that syncs the external clock generator at 35, auto gain at 90 - while the
+    // picture itself is perfectly stable. Sync loss still resets the counter through the branches
+    // above, and HSACT going away takes getStatus16SpHsStable() with it, so an absent source
+    // cannot accumulate here.
+    // Gated on genuineSyncLoss rather than noSyncCounter: the counter is only cleared inside this
+    // branch, so testing it here would let the first sync blip lock a mode-less source out of the
+    // branch permanently - it could never get back in to clear what keeps it out.
+    } else if (getStatus16SpHsStable() && rto->videoStandardInput != 15 &&
+               ((detectedVideoMode != 0 && rto->videoStandardInput == detectedVideoMode) ||
+                (rto->syncTypeCsync && videoStandardInputIsPalNtscSd() && !genuineSyncLoss))) {
         // last used mode reappeared / stable again
         if (rto->continousStableCounter < 255) {
             rto->continousStableCounter++;
@@ -685,7 +917,10 @@ void runSyncWatcher()
         }
 
         rto->noSyncCounter = 0;
+        sourceGoneProbeCount = 0; // source is back, forget any pending "source gone" probes
+        fallbackPresetTried = false; // re-arm for the next time a source turns up unclassifiable
         newVideoModeCounter = 0;
+        sourceGoneProbeCount = 0; // source is back, forget any pending "source gone" probes
 
         if (rto->continousStableCounter == 1 && !doFullRestore) {
             rto->videoIsFrozen = true; // ensures unfreeze
@@ -701,6 +936,14 @@ void runSyncWatcher()
             }
             rto->videoIsFrozen = true; // ensures unfreeze
             unfreezeVideo();           // called 2nd time here to make sure
+            if (GBS::DAC_RGBS_PWDNZ::read() == 0) {
+                // re-enable whatever the "source gone" handling above blanked, now that the
+                // source is confirmed back and stable.
+                GBS::DAC_RGBS_PWDNZ::write(1); // re-enable output if it was blanked on source loss
+                if (!uopt->wantOutputComponent) {
+                    GBS::PAD_SYNC_OUT_ENZ::write(0); // and sync with it, if that was stopped too
+                }
+            }
         }
 
         if (rto->continousStableCounter == 4) {
@@ -764,22 +1007,29 @@ void runSyncWatcher()
                         }
                     }
 
+                    // csync SD sources have unreliable VPERIOD_IF (no discrete vsync, VSACT=0)
+                    // — require more stable readings before toggling deinterlacer, and skip
+                    // timingAdjustDelay (clock recalibration based on noisy data causes jumps)
+                    const uint8_t deintStableThreshold = rto->syncTypeCsync ? 8 : 2;
+
                     if (VPERIOD_IF == 522 || VPERIOD_IF == 524 || VPERIOD_IF == 526 ||
                         VPERIOD_IF == 622 || VPERIOD_IF == 624 || VPERIOD_IF == 626) { // ie v:524, even counts > enable
                         filteredLineCountMotionAdaptiveOn++;
                         filteredLineCountMotionAdaptiveOff = 0;
-                        if (filteredLineCountMotionAdaptiveOn >= 2) // at least >= 2
+                        if (filteredLineCountMotionAdaptiveOn >= deintStableThreshold)
                         {
                             if (uopt->deintMode == 0 && !rto->motionAdaptiveDeinterlaceActive) {
                                 if (GBS::GBS_OPTION_SCANLINES_ENABLED::read() == 1) { // don't rely on rto->scanlinesEnabled
                                     disableScanlines();
                                 }
                                 enableMotionAdaptDeinterlace();
-                                if (timingAdjustDelay == 0) {
-                                    timingAdjustDelay = 11; // arm timer only if it's not already armed
-                                    oddEvenWhenArmed = VPERIOD_IF % 2;
-                                } else {
-                                    timingAdjustDelay = 0; // cancel timer
+                                if (!rto->syncTypeCsync) {
+                                    if (timingAdjustDelay == 0) {
+                                        timingAdjustDelay = 11; // arm timer only if it's not already armed
+                                        oddEvenWhenArmed = VPERIOD_IF % 2;
+                                    } else {
+                                        timingAdjustDelay = 0; // cancel timer
+                                    }
                                 }
                                 preventScanlines = 1;
                             }
@@ -789,15 +1039,17 @@ void runSyncWatcher()
                                VPERIOD_IF == 623 || VPERIOD_IF == 625 || VPERIOD_IF == 627) { // ie v:523, uneven counts > disable
                         filteredLineCountMotionAdaptiveOff++;
                         filteredLineCountMotionAdaptiveOn = 0;
-                        if (filteredLineCountMotionAdaptiveOff >= 2) // at least >= 2
+                        if (filteredLineCountMotionAdaptiveOff >= deintStableThreshold)
                         {
                             if (uopt->deintMode == 0 && rto->motionAdaptiveDeinterlaceActive) {
                                 disableMotionAdaptDeinterlace();
-                                if (timingAdjustDelay == 0) {
-                                    timingAdjustDelay = 11; // arm timer only if it's not already armed
-                                    oddEvenWhenArmed = VPERIOD_IF % 2;
-                                } else {
-                                    timingAdjustDelay = 0; // cancel timer
+                                if (!rto->syncTypeCsync) {
+                                    if (timingAdjustDelay == 0) {
+                                        timingAdjustDelay = 11; // arm timer only if it's not already armed
+                                        oddEvenWhenArmed = VPERIOD_IF % 2;
+                                    } else {
+                                        timingAdjustDelay = 0; // cancel timer
+                                    }
                                 }
                             }
                             filteredLineCountMotionAdaptiveOff = 0;
@@ -1010,17 +1262,20 @@ void runSyncWatcher()
             }
             // if currently in scaling RGB/HV, check for "SD" < > "EDTV" style source changes
             else if ((sourceLines <= 535 && sourceLines != 0) && rto->videoStandardInput == 14) {
-                // todo: custom presets?
-                if (sourceLines < 280 && activePresetLineCount > 280) {
-                    rto->videoStandardInput = 1;
-                } else if (sourceLines < 380 && activePresetLineCount > 380) {
-                    rto->videoStandardInput = 2;
-                } else if (sourceLines > 380 && activePresetLineCount < 380) {
-                    rto->videoStandardInput = 3;
-                    needPostAdjust = 1;
-                }
+                // Backported from JuergenLeber/gbs-control. Sort both the source and the preset that
+                // is loaded into the same three bands and act when they stop agreeing. Comparing the
+                // two against thresholds pairwise, as this used to, leaves a hole: a PAL-like source
+                // with an NTSC-like preset in place (312 lines against 262) matches none of the
+                // cases, so nothing switches back. That is the transition an Atari makes on reset -
+                // it comes up at 60Hz and switches itself to 50Hz a moment later, and the 60Hz preset
+                // stayed behind, leaving the frame time lock chasing an output rate it can never reach.
+                uint8_t sourceBand = (sourceLines < 280) ? 1 : ((sourceLines < 380) ? 2 : 3);
+                // 0 = no preset measured yet, which counts as disagreeing with anything
+                uint8_t activeBand = (activePresetLineCount == 0)
+                    ? 0
+                    : ((activePresetLineCount < 280) ? 1 : ((activePresetLineCount < 380) ? 2 : 3));
 
-                if (rto->videoStandardInput != 14) {
+                if (sourceBand != activeBand) {
                     // check thoroughly first
                     uint16_t firstDetectedSourceLines = sourceLines;
                     boolean moveOn = 1;
@@ -1034,98 +1289,49 @@ void runSyncWatcher()
                     }
 
                     if (moveOn) {
-                        // need to change presets
-                        if (rto->videoStandardInput <= 2) {
-                            SerialM.println(F(" RGB/HV upscale mode base 15kHz"));
-                        } else {
-                            SerialM.println(F(" RGB/HV upscale mode base 31kHz"));
+                        // A steady line count is not the same as a line count that comes from the
+                        // source. With the discrete H/V input gated off - which is what a disturbed
+                        // source can leave behind, since a CSync verdict gates it and the verdict
+                        // survives the disturbance - the sync processor free runs its vertical, and
+                        // that shows up right here as a rock steady "format change" to something
+                        // PAL-like that the source never sent.
+                        // So ask the H/V pins directly before believing it. If they disagree, the
+                        // sync configuration changed, not the source, and it has to be rebuilt from
+                        // bypass rather than followed.
+                        uint16_t probedLines = 0;
+                        boolean probeFoundVSync = probeDiscreteVSync(&probedLines);
+                        int lineDelta = (int)probedLines - (int)sourceLines;
+                        if (lineDelta < 0) {
+                            lineDelta = -lineDelta;
                         }
 
-                        if (uopt->presetPreference == 10) {
-                            uopt->presetPreference = Output960P; // fix presetPreference which can be "bypass"
+                        SerialM.print(F("RGB/HV format change, vt:"));
+                        SerialM.print(sourceLines);
+                        SerialM.print(F(" was:"));
+                        SerialM.println(activePresetLineCount);
+
+                        if (probeFoundVSync && lineDelta > 8) {
+                            SerialM.print(F("vertical disagrees, discrete vt:"));
+                            SerialM.println(probedLines);
+                            rto->isValidForScalingRGBHV = false;
+                            rto->videoStandardInput = 15;
+                            applyPresets(15); // re-probes the sync type on the way
+                            delay(300);
+                            return;
                         }
 
-                        activePresetLineCount = sourceLines;
-                        applyPresets(rto->videoStandardInput);
-
-                        GBS::GBS_OPTION_SCALING_RGBHV::write(1);
-                        GBS::IF_INI_ST::write(16);   // fixes pal(at least) interlace
-                        GBS::SP_SOG_P_ATO::write(1); // 5_20 1 auto SOG polarity
-
-                        // adjust vposition
-                        GBS::SP_SDCS_VSST_REG_L::write(2); // 5_3f
-                        GBS::SP_SDCS_VSSP_REG_L::write(0); // 5_40
-
-                        rto->coastPositionIsSet = rto->clampPositionIsSet = 0;
-                        rto->videoStandardInput = 14;
-
-                        if (GBS::PLLAD_ICP::read() >= 6) {
-                            GBS::PLLAD_ICP::write(5); // reduce charge pump current for more general use
-                            latchPLLAD();
-                        }
-
-                        updateSpDynamic(1);
-                        if (rto->syncTypeCsync == false) {
-                            GBS::SP_SOG_MODE::write(0);
-                            GBS::SP_CLAMP_MANUAL::write(1);
-                            GBS::SP_NO_COAST_REG::write(1);
-                        } else {
-                            GBS::SP_SOG_MODE::write(1);
-                            GBS::SP_H_CST_ST::write(0x10); // 5_4d  // set some default values
-                            GBS::SP_H_CST_SP::write(0x80); // will be updated later
-                            GBS::SP_H_PROTECT::write(1);   // some modes require this (or invert SOG)
-                        }
-                        delay(300);
-
-                        if (rto->extClockGenDetected && !uopt->disableExternalClockGenerator && rto->videoStandardInput != 14) {
-                            // switch to ext clock
-                            if (!rto->outModeHdBypass) {
-                                if (GBS::PLL648_CONTROL_01::read() != 0x75) {
-                                    // Store current clock if it's not our target or internal default
-                                    if (GBS::PLL648_CONTROL_01::read() != 0x35) {
-                                        GBS::GBS_PRESET_DISPLAY_CLOCK::write(GBS::PLL648_CONTROL_01::read());
-                                    }
-                                    
-                                    // Switch to external clock (0x75)
-                                    Si.enable(0);
-                                    delayMicroseconds(800);
-                                    GBS::PLL648_CONTROL_01::write(0x75);
-                                    GBS::PAD_CKIN_ENZ::write(0); // Ensure CKIN is enabled
-                                }
-                            }
-                            // sync clocks now
-                            externalClockGenSyncInOutRate();
-                        }
-
-                        // note: this is all duplicated above. unify!
-                        if (needPostAdjust) {
-                            // base preset was "3" / no line doubling
-                            // info: actually the position needs to be adjusted based on hor. freq or "h:" value (todo!)
-                            GBS::IF_HB_ST2::write(0x08);  // patches
-                            GBS::IF_HB_SP2::write(0x68);  // image
-                            GBS::IF_HBIN_SP::write(0x50); // position
-                            if (rto->presetID == 0x05) {
-                                GBS::IF_HB_ST2::write(0x480);
-                                GBS::IF_HB_SP2::write(0x8E);
-                            }
-
-                            float sfr = getSourceFieldRate(0);
-                            if (sfr >= 69.0) {
-                                SerialM.println("source >= 70Hz");
-                                // increase vscale; vscale -= 57 seems to hit magic factor often
-                                // 512 + 57 = 569 + 57 = 626 + 57 = 683
-                                GBS::VDS_VSCALE::write(GBS::VDS_VSCALE::read() - 57);
-
-                            } else {
-                                // 50/60Hz, presumably
-                                // adjust vposition
-                                GBS::IF_VB_SP::write(8);
-                                GBS::IF_VB_ST::write(6);
-                            }
-                        }
-                    } else {
-                        // was unstable, undo videoStandardInput change
-                        rto->videoStandardInput = 14;
+                        // Hand the change to the classification branch above rather than swapping
+                        // the preset in place here. Reloading a preset is only part of the job: the
+                        // classification prepares the ADC and the PLLs first, then waits out the
+                        // settling time, and applies anything only after that. A preset loaded onto
+                        // a front end still set up for the format that just went away leaves the
+                        // capture side without a working clock, which is what puts those fading
+                        // patterns on screen - a decaying frame buffer instead of a picture. Going
+                        // through mode 15 also re-measures the field rate, so a 50Hz source gets the
+                        // 50Hz base preset instead of the 60Hz one this path assumed. It is the same
+                        // handover the web UI performs when a preset is picked.
+                        rto->videoStandardInput = 15;
+                        return;
                     }
                 }
             }
@@ -1185,14 +1391,27 @@ void runSyncWatcher()
         } else {
             VSHSStatus = GBS::STATUS_16::read();
             // this status usually updates when a source goes off
-            stable = ((VSHSStatus & 0x0a) == 0x0a); // RGBHV > check h+v from 0_16
+            if (rto->vsyncFlagUnreliable) {
+                // this source never raises the VS active bit, so requiring it here would
+                // count every pass as unstable and reset a perfectly locked picture
+                stable = ((VSHSStatus & 0x02) == 0x02);
+            } else {
+                stable = ((VSHSStatus & 0x0a) == 0x0a); // RGBHV > check h+v from 0_16
+            }
             limitNoSync = 300;
         }
+
+        // set while the source is away, acted on once it is back and holding still again
+        static boolean rgbhvSourceWasInterrupted = false;
 
         if (!stable) {
             LEDOFF;
             RGBHVNoSyncCounter++;
             rto->continousStableCounter = 0;
+            if (RGBHVNoSyncCounter >= 20) {
+                // longer than a stray glitch: the source really went away for a moment
+                rgbhvSourceWasInterrupted = true;
+            }
             if (RGBHVNoSyncCounter % 20 == 0) {
                 SerialM.print("`");
             }
@@ -1217,6 +1436,161 @@ void runSyncWatcher()
             //Serial.println("RGBHV limit no sync");
         }
 
+        // Backported from JuergenLeber/gbs-control: catches an RGB/HV upscale mode that survives a
+        // source interruption (e.g. the source being reset) with stale measurements, which is what
+        // leaves a black screen, wrong colours, or a rejected output timing after the source comes
+        // back. Re-enters via mode 15 to classify the source from scratch rather than resuming with
+        // whatever base preset/sync setup was measured before the interruption.
+
+        // remembers what the source measured once the upscale mode had settled on it
+        static uint16_t settledLineCount = 0;
+        // a reading already re-detected once, kept so a source that keeps producing it can't loop
+        static uint16_t rejectedLineCount = 0;
+
+        if (rto->videoStandardInput != 14) {
+            // mode 15 gets fully re-measured by the upscale branch above anyway
+            rgbhvSourceWasInterrupted = false;
+            settledLineCount = 0;
+        }
+
+        // The stability check above watches the horizontal only for sources whose VS active flag the
+        // SP never raises, so a disturbance that breaks just the vertical - a source restarting its
+        // frame counter, which is exactly what a reset button does - passes unnoticed, and the frame
+        // sync stays locked to a vertical that no longer exists. The measured line count is the one
+        // reading that always follows the source, so watch that instead. Calibrated from the source
+        // itself rather than from the classification measurement, so a line count that simply reads
+        // differently in mode 14 than it did in mode 15 cannot start a loop, and the deviation has to
+        // persist: a source jittering around its own value keeps resetting the count.
+        if (rto->videoStandardInput == 14 && stable) {
+            static uint8_t lineCountOffCounter = 0;
+            uint16_t lines = GBS::STATUS_SYNC_PROC_VTOTAL::read();
+
+            if (rto->continousStableCounter < 50) {
+                // not settled (or a preset was just applied): the old reference no longer describes
+                // what is being measured, take a fresh one once it holds still again
+                settledLineCount = 0;
+                lineCountOffCounter = 0;
+            } else if (settledLineCount == 0) {
+                if (lines >= 100) {
+                    // Check once per preset, now that it has settled, that this vertical is the
+                    // source's and not the sync processor's own free running one. A free run reads
+                    // just as steadily as a real source, so nothing above can tell them apart, and
+                    // the preset that got built on it stays in place looking broken - the picture
+                    // repeating, sampled at a dot clock for a line rate the source doesn't send.
+                    // Only meaningful for sources believed to have discrete H/V; for CSync the
+                    // probe has nothing authoritative to say. Rate limited because a source that
+                    // keeps unsettling would otherwise arrive here over and over, and the probe
+                    // costs half a second of reconfigured sync processor each time.
+                    static unsigned long lastVerticalVerify = 0;
+                    boolean worthVerifying = !rto->syncTypeCsync && lines != rejectedLineCount &&
+                        (millis() - lastVerticalVerify) > 10000;
+
+                    if (worthVerifying) {
+                        uint16_t probedLines = 0;
+                        lastVerticalVerify = millis();
+
+                        int lineDelta = 0;
+                        if (probeDiscreteVSync(&probedLines)) {
+                            lineDelta = (int)probedLines - (int)lines;
+                            if (lineDelta < 0) {
+                                lineDelta = -lineDelta;
+                            }
+                        }
+
+                        if (lineDelta > 8) {
+                            // once per distinct reading: if re-detecting lands on the same value
+                            // again, it is the best this source is going to give, so let it stand
+                            rejectedLineCount = lines;
+                            SerialM.print(F("\nRGB/HV locked to a vertical the source doesn't send, vt:"));
+                            SerialM.print(lines);
+                            SerialM.print(F(" discrete vt:"));
+                            SerialM.print(probedLines);
+                            SerialM.println(F(" > re-detecting"));
+                            settledLineCount = 0;
+                            rgbhvSourceWasInterrupted = false;
+                            rto->videoStandardInput = 15;
+                            rto->isValidForScalingRGBHV = false;
+                            applyPresets(15);
+                            delay(300);
+                            return;
+                        }
+                    }
+                    settledLineCount = lines;
+                }
+                lineCountOffCounter = 0;
+            } else if (lines < (settledLineCount - 8) || lines > (settledLineCount + 8)) {
+                if (++lineCountOffCounter >= 25) { // ~0.5s
+                    lineCountOffCounter = 0;
+                    settledLineCount = 0;
+                    rgbhvSourceWasInterrupted = true;
+                }
+            } else {
+                lineCountOffCounter = 0;
+            }
+        }
+
+        // The upscale mode is built entirely out of measurements taken when it was entered: base
+        // preset, scale factors, sync type and the whole SP setup describe the source as it looked
+        // then. After an interruption (someone hitting reset on the source, a machine changing
+        // resolution while restarting) those measurements no longer have to hold, and resuming with
+        // them is what leaves a black screen, a wrongly coloured picture, or an output timing the
+        // display refuses. The sync loss machinery further up cannot repair that either: it is built
+        // around CSync sources and only ever restores parts of the setup.
+        // So do what re-selecting a preset in the web UI does: drop back to plain bypass and let the
+        // upscale branch classify the source again from scratch. applyPresets(15) re-probes the sync
+        // type on the way, which also undoes a CSync verdict picked up during the disturbance.
+        // Waiting for the source to come back stable is only safe while the preset still fits it.
+        // Once it doesn't - the source changed format, or the sync setup got scrambled - the preset
+        // is itself what keeps the source from ever reading stable, and the wait would never end:
+        // the teardown at limitNoSync is 6 seconds of no picture away and restarts from input
+        // detection. Plain bypass locks to whatever timing arrives, so go there instead and let the
+        // upscale branch classify the source from there.
+        // The HSACT condition keeps a source that was simply switched off out of this: that one has
+        // nothing to re-detect and is handled by the teardown further down, which blanks the output
+        // rather than leaving the last frame on screen.
+        if (rto->videoStandardInput == 14 &&
+            ((RGBHVNoSyncCounter >= 40 && GBS::STATUS_SYNC_PROC_HSACT::read() == 1) ||
+             (rgbhvSourceWasInterrupted && rto->continousStableCounter >= 20))) {
+            rgbhvSourceWasInterrupted = false;
+            settledLineCount = 0;
+            rejectedLineCount = 0; // the source really went away, so judge it fresh when it returns
+            RGBHVNoSyncCounter = 0;
+            SerialM.println(F("\nRGB/HV source interrupted, re-detecting"));
+            rto->videoStandardInput = 15;
+            rto->isValidForScalingRGBHV = false;
+            applyPresets(15);
+            delay(300);
+            return;
+        }
+
+        // The CSync verdict is self confirming: syncTypeCsync gates the discrete H/V input off, and
+        // with it gated off nothing can ever show that the source has a vertical of its own. A source
+        // misjudged during a disturbance therefore stays misjudged - horizontally locked at best,
+        // vertical free running, and no way out but applying a preset by hand. probeDiscreteVSync()
+        // looks past the gate, so retry it while the vertical measurement stays empty. This mirrors
+        // the retry that modes 1..13 get further up, which deliberately excludes RGB/HV.
+        {
+            static uint16_t rgbhvNoVerticalCounter = 0;
+
+            if (rto->syncTypeCsync && GBS::STATUS_SYNC_PROC_HSACT::read() == 1 &&
+                GBS::STATUS_SYNC_PROC_VTOTAL::read() == 0) {
+                if (++rgbhvNoVerticalCounter >= 150) { // syncwatcher runs every 20ms, so ~3s
+                    rgbhvNoVerticalCounter = 0;
+                    if (probeDiscreteVSync(NULL)) {
+                        SerialM.println(F("CSync assumed, but source has discrete VSync > RGB/HV"));
+                        rto->syncTypeCsync = false;
+                        rto->videoStandardInput = 15;
+                        rto->isValidForScalingRGBHV = false;
+                        applyPresets(15);
+                        delay(300);
+                        return;
+                    }
+                }
+            } else {
+                rgbhvNoVerticalCounter = 0;
+            }
+        }
+
         static unsigned long lastTimeSogAndPllRateCheck = millis();
         if ((millis() - lastTimeSogAndPllRateCheck) > 900) {
             if (rto->videoStandardInput == 15) {
@@ -1232,10 +1606,21 @@ void runSyncWatcher()
                     runsWithSogBadStatus++;
                     //SerialM.print("test: "); SerialM.println(runsWithSogBadStatus);
                     if (runsWithSogBadStatus >= 4) {
-                        SerialM.println(F("RGB/HV < > SOG"));
-                        rto->syncTypeCsync = true;
-                        rto->HPLLState = runsWithSogBadStatus = RGBHVNoSyncCounter = 0;
-                        rto->noSyncCounter = 0x07fe; // will cause a return
+                        // Backported from JuergenLeber/gbs-control: check before switching. The SOG
+                        // bad flag stays up for as long as a source is disturbed, and a machine being
+                        // reset holds it up well past four passes without having changed its sync
+                        // type at all. The switch is a one way door: syncTypeCsync gates the discrete
+                        // H/V input off, so afterwards nothing can show that the source still has a
+                        // vertical of its own.
+                        if (probeDiscreteVSync(NULL)) {
+                            // still RGB/HV, it was only disturbed
+                            runsWithSogBadStatus = 0;
+                        } else {
+                            SerialM.println(F("RGB/HV < > SOG"));
+                            rto->syncTypeCsync = true;
+                            rto->HPLLState = runsWithSogBadStatus = RGBHVNoSyncCounter = 0;
+                            rto->noSyncCounter = 0x07fe; // will cause a return
+                        }
                     }
                 } else {
                     runsWithSogBadStatus = 0;
@@ -1360,6 +1745,11 @@ void runSyncWatcher()
         // restore initial conditions and move to input detect
         GBS::DAC_RGBS_PWDNZ::write(0); // 0 = disable DAC
         rto->noSyncCounter = 0;
+        sourceGoneProbeCount = 0; // whatever turns up next has to prove itself again
+        sourceWasClassified = false;
+        fallbackPresetTried = false; // full teardown, so the fallback is worth a fresh attempt
+        crtcTimingHold = false;      // nothing left to hold, and it must not greet the next source
+        modeUnknownCounter = 0;
         SerialM.println();
         goLowPowerWithInputDetection(); // does not further nest, so it can be called here // sets reset parameters
     }

@@ -211,6 +211,25 @@ void setup()
         // ESP32
         // WiFi.setSleep(false);
 #endif
+        // load hostname override before starting the webserver, so AP/STA mode and mDNS use
+        // the right name from the first connection attempt onward. Safe to mount LittleFS here
+        // early: the later LittleFS.begin() call (for presets/preferences) just detects that the
+        // filesystem is already mounted and continues normally.
+#ifdef ESP32
+        if (LittleFS.begin(true)) {
+#else
+        if (LittleFS.begin()) {
+#endif
+            File hostnameFile = LittleFS.open("/hostname.txt", "r");
+            if (hostnameFile) {
+                String hn = hostnameFile.readStringUntil('\n');
+                hn.trim();
+                if (hn.length() > 0 && hn.length() <= 32) {
+                    device_hostname = hn;
+                }
+                hostnameFile.close();
+            }
+        }
         startWebserver();
         rto->webServerStarted = true;
     } else {
@@ -1430,6 +1449,41 @@ void loop()
             case ':':
                 externalClockGenSyncInOutRate();
                 break;
+            case 'Q': {
+                // Black level and brightness state, for diagnosing a grey black or an over bright
+                // picture without a serial port: single character commands are the only ones the
+                // web UI can send (/sc takes one character), and a multistage register read
+                // cannot be reached that way.
+                //
+                // One printf per line on purpose. SerialMirror sends a websocket frame per write()
+                // call, and Print::print() of a number emits one call per digit, so a line built
+                // from several prints tends to reach the debug window with its numbers missing.
+                //
+                // printf_P, not printf: a plain string literal lives in DRAM on this part, and
+                // format strings this long cost heap that the websocket log needs.
+                SerialM.printf_P(PSTR("clamp: positionIsSet %d, 5_57_0 no_clamp %d, 5_56_2 manual %d, window 0x%03X..0x%03X\n"),
+                    rto->clampPositionIsSet ? 1 : 0,
+                    GBS::SP_NO_CLAMP_REG::read(),
+                    GBS::SP_CLAMP_MANUAL::read(),
+                    GBS::SP_CS_CLP_ST::read(),
+                    GBS::SP_CS_CLP_SP::read());
+                SerialM.printf_P(PSTR("adc: gain R 0x%02X G 0x%02X B 0x%02X, offset R 0x%02X G 0x%02X B 0x%02X\n"),
+                    GBS::ADC_RGCTRL::read(), GBS::ADC_GGCTRL::read(), GBS::ADC_BGCTRL::read(),
+                    GBS::ADC_ROFCTRL::read(), GBS::ADC_GOFCTRL::read(), GBS::ADC_BOFCTRL::read());
+                // adco holds what a preset load or the auto gain run last decided, which is what
+                // gets written back on the next preset load - not necessarily what is live above
+                SerialM.printf_P(PSTR("auto gain %d, stored gain R 0x%02X G 0x%02X B 0x%02X, offset R 0x%02X G 0x%02X B 0x%02X\n"),
+                    uopt->enableAutoGain ? 1 : 0,
+                    adco->r_gain, adco->g_gain, adco->b_gain,
+                    adco->r_off, adco->g_off, adco->b_off);
+                SerialM.printf_P(PSTR("source: preset mode %d, detected mode %d, csync %d, stable %d, h %d, heap %d\n"),
+                    rto->videoStandardInput, getVideoMode(), rto->syncTypeCsync ? 1 : 0,
+                    rto->continousStableCounter, GBS::HPERIOD_IF::read(), ESP.getFreeHeap());
+                SerialM.printf_P(PSTR("sync: sog %d (max %d), noSync %d, HSACT %d, hs stable %d, dac %d, syncout %d\n"),
+                    rto->currentLevelSOG, rto->thisSourceMaxLevelSOG, rto->noSyncCounter,
+                    GBS::STATUS_SYNC_PROC_HSACT::read(), getStatus16SpHsStable() ? 1 : 0,
+                    GBS::DAC_RGBS_PWDNZ::read(), GBS::PAD_SYNC_OUT_ENZ::read());
+            } break;
             case ';':
                 externalClockGenResetClock();
                 if (rto->extClockGenDetected) {
@@ -1495,9 +1549,24 @@ void loop()
             }
             //unsigned long startTime = millis();
             fsDebugPrintf("running frame sync, clock gen enabled = %d\n", rto->extClockGenDetected);
-            bool success = rto->extClockGenDetected
-                ? FrameSync::runFrequency()
-                : FrameSync::runVsync(uopt->frameTimeLockMethod);
+            // A preset load clears the ratio (externalClockGenResetClock) and the
+            // applyPresetDoneStage path is the only thing that puts it back, in a single attempt.
+            // That attempt gives up without retrying whenever the source field rate cannot be
+            // measured at that moment - a glitching source is enough - and from then on every pass
+            // through here would call runFrequency() with an uninitialized ratio while the frame
+            // time lock stays dead. Ask for the ratio again here instead, rate limited.
+            static unsigned long lastExtClockRatioRetry = 0;
+            bool success = true;
+            if (rto->extClockGenDetected) {
+                if (FrameSync::frequencyReady()) {
+                    success = FrameSync::runFrequency();
+                } else if ((millis() - lastExtClockRatioRetry) > 5000) {
+                    lastExtClockRatioRetry = millis();
+                    externalClockGenSyncInOutRate();
+                }
+            } else {
+                success = FrameSync::runVsync(uopt->frameTimeLockMethod);
+            }
             if (!success) {
                 if (rto->syncLockFailIgnore-- == 0) {
                     FrameSync::reset(uopt->frameTimeLockMethod); // in case run() failed because we lost sync signal

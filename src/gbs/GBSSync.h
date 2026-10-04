@@ -12,6 +12,7 @@ void resetInterruptSogSwitchBit();
 void resetInterruptSogBadBit();
 void resetInterruptNoHsyncBadBit();
 void activeFrameTimeLockInitialSteps();
+boolean probeDiscreteVSync(uint16_t *measuredLines = nullptr);
 
 #endif // GBS_SYNC_H
 

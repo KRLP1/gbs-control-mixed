@@ -79,13 +79,26 @@ const uint8_t *loadPresetFromLittleFS(byte forVideoMode)
         f.close();
     }
 
+    // savePresetToLittleFS() writes exactly sizeof(preset) values, each as "N,\r\n", so splitting
+    // on ',' also yields a trailing "\r\n" token after the final comma - one more than there is
+    // room for. Bounding this matters beyond that off by one: a file written by another firmware
+    // revision, or a damaged one, would otherwise run off the end of this static and into
+    // whatever the linker placed after it.
     char *tmp;
     uint16_t i = 0;
     tmp = strtok(&s[0], ",");
-    while (tmp) {
+    while (tmp && i < sizeof(preset)) {
         preset[i++] = (uint8_t)atoi(tmp);
         tmp = strtok(NULL, ",");
         yield(); // wifi stack
+    }
+
+    if (i != sizeof(preset)) {
+        SerialM.print(F("warning: preset file holds "));
+        SerialM.print(i);
+        SerialM.print(F(" of "));
+        SerialM.print(sizeof(preset));
+        SerialM.println(F(" values, may be damaged"));
     }
 
     return preset;
@@ -117,24 +130,40 @@ void savePresetToLittleFS()
     SerialM.print(F("saving to preset slot "));
     SerialM.println(String((char)slot));
 
-    if (rto->videoStandardInput == 1) {
+    // Scaling RGB/HV shuffles videoStandardInput between 3, 14 and 15 while the sync watcher
+    // works: writeProgramArrayNew() leaves it at 3, the scaling block restores 14, and loading
+    // routes through 15. So it cannot name the file on its own. applyPresets() always asks the
+    // load side for mode 14 in this configuration, so the save has to agree - otherwise it writes
+    // preset_ntsc_480p, or (at 15) matches no branch at all and saves nothing, while reporting
+    // success. The load then finds no file and silently falls back to ntsc_240p.
+    uint8_t forVideoMode = rto->videoStandardInput;
+    if (GBS::GBS_OPTION_SCALING_RGBHV::read() == 1 || rto->isValidForScalingRGBHV) {
+        forVideoMode = 14;
+    }
+
+    if (forVideoMode == 1) {
         f = LittleFS.open("/preset_ntsc." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 2) {
+    } else if (forVideoMode == 2) {
         f = LittleFS.open("/preset_pal." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 3) {
+    } else if (forVideoMode == 3) {
         f = LittleFS.open("/preset_ntsc_480p." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 4) {
+    } else if (forVideoMode == 4) {
         f = LittleFS.open("/preset_pal_576p." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 5) {
+    } else if (forVideoMode == 5) {
         f = LittleFS.open("/preset_ntsc_720p." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 6) {
+    } else if (forVideoMode == 6) {
         f = LittleFS.open("/preset_ntsc_1080p." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 8) {
+    } else if (forVideoMode == 8) {
         f = LittleFS.open("/preset_medium_res." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 14) {
+    } else if (forVideoMode == 14) {
         f = LittleFS.open("/preset_vga_upscale." + String((char)slot), "w");
-    } else if (rto->videoStandardInput == 0) {
+    } else if (forVideoMode == 0) {
         f = LittleFS.open("/preset_unknown." + String((char)slot), "w");
+    } else {
+        // 7, 9, 13 and 15 have no preset file of their own
+        SerialM.print(F("no preset file defined for video mode "));
+        SerialM.println(forVideoMode);
+        return;
     }
 
     if (!f) {

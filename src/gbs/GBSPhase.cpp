@@ -79,7 +79,9 @@ void updateSpDynamic(boolean withCurrentVideoModeCheck)
         } else {
             GBS::SP_DLT_REG::write(0x30);
         }
-        GBS::SP_H_PULSE_IGNOR::write(0x02);
+        if (!(rto->syncTypeCsync && videoStandardInputIsPalNtscSd())) {
+            GBS::SP_H_PULSE_IGNOR::write(0x02);
+        }
         GBS::SP_H_CST_ST::write(0x10);
         GBS::SP_H_CST_SP::write(0x100);
         GBS::SP_H_COAST::write(0);        // 5_3e 2 (just in case)
@@ -102,7 +104,7 @@ void updateSpDynamic(boolean withCurrentVideoModeCheck)
             GBS::SP_DLT_REG::write(0xC0);     // old: 0x140 works better than 0x130 with psx
             GBS::SP_H_TIMER_VAL::write(0x28); // 5_33
 
-            if (rto->syncTypeCsync) {
+            if (rto->syncTypeCsync && !withCurrentVideoModeCheck) {
                 uint16_t hPeriod = GBS::HPERIOD_IF::read();
                 for (int i = 0; i < 16; i++) {
                     if (hPeriod == 511 || hPeriod < 200) {
@@ -270,7 +272,17 @@ void updateClampPosition()
     }
     // this is required especially on mode changes with ypbpr
     if (getVideoMode() == 0) {
-        return;
+        // ... but the IF mode bits stay 0 for some csync SD sources even with sync perfectly
+        // valid - the same class of issue the HSACT-based sync-loss detection works around above.
+        // Returning here for those leaves the clamp locked off for good: every preset load forces
+        // SP_NO_CLAMP_REG to 1 and only a successful run through here clears it again. With no
+        // clamp the AC coupled input has nothing holding its back porch, so black drifts upwards
+        // over the first seconds and stays there - a grey that fades in.
+        boolean csyncSdHsyncStable = rto->syncTypeCsync && videoStandardInputIsPalNtscSd() &&
+            getStatus16SpHsStable() && rto->noSyncCounter == 0;
+        if (!csyncSdHsyncStable) {
+            return;
+        }
     }
 
     if (rto->inputIsYpBpR) {

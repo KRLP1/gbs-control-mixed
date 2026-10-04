@@ -421,11 +421,28 @@ void handleType2Command(char argument)
         case 'u':
             // restart to attempt wifi station mode connect
             delay(30);
-            WiFi.mode(WIFI_STA);
 #ifdef ESP8266
-            WiFi.hostname(device_hostname_partial); // _full
+            if (pendingWifiSSID.length()) {
+                // Backported from JuergenLeber/gbs-control: persist WiFi credentials and STA mode
+                // directly via SDK flash functions, here in the main loop rather than inside the
+                // /wifi/connect request callback (see WebServer.cpp). wifi_set_opmode() and
+                // wifi_station_set_config() write to flash (unlike their *_current() variants,
+                // which only update RAM), so the credentials survive the restart below.
+                struct station_config wifiConf;
+                memset(&wifiConf, 0, sizeof(wifiConf));
+                strncpy(reinterpret_cast<char *>(wifiConf.ssid), pendingWifiSSID.c_str(), sizeof(wifiConf.ssid) - 1);
+                strncpy(reinterpret_cast<char *>(wifiConf.password), pendingWifiPassword.c_str(), sizeof(wifiConf.password) - 1);
+                wifi_set_opmode(STATION_MODE);
+                wifi_station_set_config(&wifiConf);
+                pendingWifiSSID = "";
+                pendingWifiPassword = "";
+            } else {
+                WiFi.mode(WIFI_STA);
+            }
+            WiFi.hostname(device_hostname.c_str());
 #else
-            WiFi.setHostname(device_hostname_partial);
+            WiFi.mode(WIFI_STA);
+            WiFi.setHostname(device_hostname.c_str());
 #endif
             delay(30);
 #ifdef ESP8266

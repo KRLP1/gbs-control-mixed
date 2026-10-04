@@ -11,6 +11,106 @@
 #include "tv5725.h"
 #include "../core/options.h"
 
+// Backported from JuergenLeber/gbs-control: a supplementary, invasive probe for discrete VSync.
+// Kwakx normally decides csync vs. discrete sync purely from GBS::SP_SOG_MODE (see SyncWatcher.cpp).
+// That register read is not reliable for every source - e.g. Amstrad/Schneider CPC (long PAL lines
+// overflow the chip's own line counter) or an Atari ST in high-res monochrome (no reliable VSACT
+// flag at all). This probe cross-checks by temporarily forcing HV input / SOG off and counting
+// lines directly, then restores the original register state. It is deliberately NOT wired into the
+// primary per-frame detection path (SyncWatcher.cpp:~625) - only call it from a state that is
+// already stuck/ambiguous, since it takes >300ms and briefly disturbs live sync processing.
+//
+// Needs the PLL to already have H lock: without it VTOTAL reads 0 and this reports nothing found.
+//
+// Reports the line count it measured through measuredLines (may be nullptr), which is the only
+// line count that is known to come from the source rather than from a free running sync processor.
+//
+// Leaves the HV input and sync mode registers as it found them.
+boolean probeDiscreteVSync(uint16_t *measuredLines)
+{
+    typedef TV5725<GBS_ADDR> GBS;
+
+    uint8_t extSyncBackup = GBS::SP_EXT_SYNC_SEL::read();
+    uint8_t sogModeBackup = GBS::SP_SOG_MODE::read();
+
+    GBS::SP_EXT_SYNC_SEL::write(0); // connect HV input
+    GBS::SP_SOG_MODE::write(0);
+    delay(260); // SP needs a while before the counters settle
+
+    boolean flaggedByChip = GBS::STATUS_SYNC_PROC_VSACT::read() == 1;
+
+    // Judge the line count by the median of a handful of samples, not by the first one. These
+    // status registers flicker: STATUS_SYNC_PROC_HTOTAL is known to return single digit garbage
+    // between two good reads (see the CRTC note in runSyncWatcher) and VTOTAL does the same. The
+    // single-sample-then-8-consecutive-agreements approach this replaces anchored on the first
+    // sample and bailed on the first disagreement, so a single flickered read out of nine reported
+    // a source with a perfectly steady line count as having no vertical at all. That verdict is
+    // self sustaining: a source called CSync gets its HV input gated off, which is the one state
+    // in which it can never be measured again.
+    const uint8_t sampleCount = 9;
+    uint16_t samples[sampleCount];
+    uint8_t taken = 0;
+    for (uint8_t i = 0; i < sampleCount; i++) {
+        if (i != 0) {
+            delay(20);
+        }
+        samples[taken++] = GBS::STATUS_SYNC_PROC_VTOTAL::read();
+        // A flat zero is what the counter reads with no H lock, which is the state every probe
+        // taken before a preset has been applied is in - the common case, and one that can never
+        // end in anything but "none". A source with a vertical does not read zero three times
+        // running, so stopping here costs nothing and returns the rest of the sampling window.
+        if (taken == 3 && samples[0] == 0 && samples[1] == 0 && samples[2] == 0) {
+            break;
+        }
+    }
+
+    uint16_t sorted[sampleCount];
+    for (uint8_t i = 0; i < taken; i++) { // insertion sort, at most nine elements
+        uint16_t value = samples[i];
+        int8_t j = (int8_t)i - 1;
+        while (j >= 0 && sorted[j] > value) {
+            sorted[j + 1] = sorted[j];
+            j--;
+        }
+        sorted[j + 1] = value;
+    }
+    uint16_t lineCount = sorted[taken / 2];
+
+    boolean found = flaggedByChip;
+    if (!found) {
+        // 200 excludes the free running 0, 1300 the saturated 11 bit ceiling
+        if (lineCount >= 200 && lineCount <= 1300) {
+            uint8_t agreeing = 0;
+            for (uint8_t i = 0; i < taken; i++) {
+                if ((samples[i] + 2) >= lineCount && samples[i] <= (lineCount + 2)) {
+                    agreeing++;
+                }
+            }
+            // two thirds of whatever was sampled. A CSync source reads 0 or wanders across the
+            // whole range here, so it cannot reach this even with the outlier tolerance; a source
+            // with a real vertical misses at most the odd flickered sample.
+            found = ((agreeing * 3) >= (taken * 2));
+        }
+    }
+
+    GBS::SP_SOG_MODE::write(sogModeBackup);
+    GBS::SP_EXT_SYNC_SEL::write(extSyncBackup);
+
+    if (measuredLines != nullptr) {
+        *measuredLines = lineCount;
+    }
+
+    // a vertical we could only find by counting lines means every later test of the VSACT bit
+    // would call this source unstable and eventually reset it
+    rto->vsyncFlagUnreliable = found && !flaggedByChip;
+
+    SerialM.print(F("discrete VSync probe: vt:"));
+    SerialM.print(lineCount);
+    SerialM.println(found ? F(" found") : F(" none"));
+
+    return found;
+}
+
 void activeFrameTimeLockInitialSteps()
 {
     typedef TV5725<GBS_ADDR> GBS;

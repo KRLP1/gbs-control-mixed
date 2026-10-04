@@ -551,7 +551,7 @@ section[name="alert"] {
   width: 100%;
 }
 
-.gbs-button[gbs-name="Empty"] ~ .gbs-button[gbs-name="Empty"] {
+.gbs-button[gbs-name="Leer"] ~ .gbs-button[gbs-name="Leer"] {
   display: none;
 }
 
@@ -793,16 +793,16 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset" style="padding: 8px 2px">
             <legend class="gbs-fieldset__legend gbs-fieldset__legend--help">
               <div class="gbs-icon">aspect_ratio</div>
-              <div>Resolution</div>
+              <div>Auflösung</div>
             </legend>
             <!-- prettier-ignore -->
             <ul class="gbs-help">
-              <li>Choose an output resolution from these presets.</li>
+              <li>Wählt eine Ausgabeauflösung aus diesen Voreinstellungen.</li>
               <li>Your selection will also be used for startup. 1280x960 is recommended for NTSC sources, 1280x1024 for PAL.
               </li>
               <li>Use the "Matched Presets" option to switch between the two automatically (Preferences tab)
               </li>
-              <li>Selecting a resolution also makes it the new startup preset.</li>
+              <li>Die Auswahl einer Auflösung macht sie außerdem zum neuen Start-Preset.</li>
             </ul>
             <div class="gbs-resolution">
               <button
@@ -876,7 +876,7 @@ section[name="alert"] {
               >
                 <div class="gbs-icon">swap_calls</div>
                 <div class="gbs-button__resolution--pass-through">
-                  Pass Through
+                  Durchleitung
                 </div>
               </button>
             </div>
@@ -888,8 +888,8 @@ section[name="alert"] {
             </legend>
             <!-- prettier-ignore -->
             <ul class="gbs-help">
-              <li>If you want to save your customizations, first select a slot for your new preset, then save to or load from that slot.</li>
-              <li>Selecting a slot also makes it the new startup preset.</li>
+              <li>Um eigene Anpassungen zu speichern: zuerst einen Slot für das neue Preset auswählen, dann in diesem Slot speichern oder daraus laden.</li>
+              <li>Die Auswahl eines Slots macht ihn außerdem zum neuen Start-Preset.</li>
             </ul>
             <div class="gbs-presets" gbs-slot-html></div>
             <div class="gbs-flex">
@@ -901,7 +901,7 @@ section[name="alert"] {
                 onclick="loadPreset()"
               >
                 <div class="gbs-icon">play_arrow</div>
-                <div>load preset</div>
+                <div>Preset laden</div>
               </button>
               <button
                 class="gbs-button gbs-button__control-action gbs-button__secondary"
@@ -909,7 +909,7 @@ section[name="alert"] {
                 active
               >
                 <div class="gbs-icon">add_circle_outline</div>
-                <div>save preset</div>
+                <div>Preset speichern</div>
               </button>
               <button
               class="gbs-button gbs-button__control-action gbs-button__secondary"
@@ -917,7 +917,7 @@ section[name="alert"] {
               active
             >
               <div class="gbs-icon">highlight_remove</div>
-              <div>remove preset</div>
+              <div>Preset löschen</div>
             </button>
             </div>
           </fieldset>
@@ -927,12 +927,12 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset">
             <legend class="gbs-fieldset__legend gbs-fieldset__legend--help">
               <div class="gbs-icon">wb_sunny</div>
-              <div>ADC Gain (brightness)</div>
+              <div>ADC-Verstärkung (Helligkeit)</div>
             </legend>
             <!-- prettier-ignore -->
             <ul class="gbs-help">
               <li>Gain +/- adjusts the gain for the currently loaded preset.</li>
-              <li>Auto Gain increases gain so bright areas are displayed as white, then decreases it when clipping is detected. Calibrate for a few seconds on a white screen.</li>
+              <li>Auto-Gain erhöht die Verstärkung, sodass helle Bereiche als Weiß dargestellt werden, und verringert sie wieder, sobald ein Clipping erkannt wird. Zum Kalibrieren einige Sekunden auf ein weißes Bild richten.</li>
             </ul>
             <div class="gbs-flex gbs-margin__bottom--16">
               <button
@@ -942,7 +942,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">remove_circle_outline</div>
-                <div>gain</div>
+                <div>Verstärkung</div>
               </button>
               <button
                 gbs-message="n"
@@ -951,7 +951,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">add_circle_outline</div>
-                <div>gain</div>
+                <div>Verstärkung</div>
               </button>
               <button
                 gbs-message="T"
@@ -961,14 +961,14 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control gbs-button__secondary"
               >
                 <div class="gbs-icon">brightness_auto</div>
-                <div>Auto Gain</div>
+                <div>Auto-Gain</div>
               </button>
             </div>
           </fieldset>
           <fieldset class="gbs-fieldset gbs-controls">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">control_camera</div>
-              <div>Picture Control</div>
+              <div>Bildsteuerung</div>
             </legend>
             <div class="gbs-flex">
               <button
@@ -1011,28 +1011,28 @@ section[name="alert"] {
                 active
               >
                 <div class="gbs-icon">open_with</div>
-                <div>move</div>
+                <div>Verschieben</div>
               </button>
               <button
                 class="gbs-button gbs-button__control"
                 gbs-control-target="scale"
               >
                 <div class="gbs-icon">zoom_out_map</div>
-                <div>scale</div>
+                <div>Skalieren</div>
               </button>
               <button
                 class="gbs-button gbs-button__control"
                 gbs-control-target="borders"
               >
                 <div class="gbs-icon">crop_free</div>
-                <div>borders</div>
+                <div>Rahmen</div>
               </button>
             </div>
           </fieldset>
           <fieldset class="gbs-fieldset gbs-controls__desktop">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">control_camera</div>
-              <div>Picture Control</div>
+              <div>Bildsteuerung</div>
             </legend>
             <div class="gbs-flex">
               <button
@@ -1063,7 +1063,7 @@ section[name="alert"] {
             <div class="gbs-flex gbs-margin__bottom--16">
               <button class="gbs-button gbs-button__control" active>
                 <div class="gbs-icon">open_with</div>
-                <div>move</div>
+                <div>Verschieben</div>
               </button>
               <button
                 gbs-message="/"
@@ -1108,7 +1108,7 @@ section[name="alert"] {
             <div class="gbs-flex gbs-margin__bottom--16">
               <button class="gbs-button gbs-button__control" active>
                 <div class="gbs-icon">zoom_out_map</div>
-                <div>scale</div>
+                <div>Skalieren</div>
               </button>
               <button
                 gbs-message="5"
@@ -1156,7 +1156,7 @@ section[name="alert"] {
                 active
               >
                 <div class="gbs-icon">crop_free</div>
-                <div>borders</div>
+                <div>Rahmen</div>
               </button>
               <button
                 gbs-message="D"
@@ -1175,12 +1175,12 @@ section[name="alert"] {
           <!-- <fieldset class="gbs-fieldset controls-desktop">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">control_camera</div>
-              <div>Picture Control</div>
+              <div>Bildsteuerung</div>
             </legend>
             <div class="">
               <button active class="gbs-button direction">
                 <div class="gbs-icon">open_with</div>
-                <div>move</div>
+                <div>Verschieben</div>
               </button>
               <div class="keyboard">
                 <div>
@@ -1231,7 +1231,7 @@ section[name="alert"] {
             <div class="">
               <button class="gbs-button direction" active>
                 <div class="gbs-icon">zoom_out_map</div>
-                <div>scale</div>
+                <div>Skalieren</div>
               </button>
               <div class="keyboard">
                 <div>
@@ -1282,7 +1282,7 @@ section[name="alert"] {
             <div class="">
               <button class="gbs-button direction" active>
                 <div class="gbs-icon">crop_free</div>
-                <div>borders</div>
+                <div>Rahmen</div>
               </button>
               <div class="keyboard">
                 <div>
@@ -1337,7 +1337,7 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset filters">
             <legend class="gbs-fieldset__legend gbs-fieldset__legend--help">
               <div class="gbs-icon">blur_on</div>
-              <div>Filters</div>
+              <div>Filter</div>
             </legend>
             <div class="gbs-margin__bottom--16">
               <div class="gbs-flex gbs-margin__bottom--16">
@@ -1349,7 +1349,7 @@ section[name="alert"] {
                   class="gbs-button gbs-button__control gbs-button__secondary"
                 >
                   <div class="gbs-icon">gradient</div>
-                  <div>scanlines</div>
+                  <div>Scanlines</div>
                 </button>
                 <button
                   gbs-message="K"
@@ -1358,7 +1358,7 @@ section[name="alert"] {
                   class="gbs-button gbs-button__control"
                 >
                   <div class="gbs-icon">gradientbolt</div>
-                  <div>intensity</div>
+                  <div>Intensität</div>
                 </button>
                 <button
                   gbs-message="m"
@@ -1368,13 +1368,13 @@ section[name="alert"] {
                   class="gbs-button gbs-button__control gbs-button__secondary"
                 >
                   <div class="gbs-icon">power_input</div>
-                  <div>line filter</div>
+                  <div>Linienfilter</div>
                 </button>
               </div>
               <ul class="gbs-help">
                 <!-- prettier-ignore -->
-                <li>Scanlines only work with 240p sources, or 480i with Bob deinterlacing.</li>
-                <li>Line Filter eliminates blocky-pixel artifacts when upscaling beyond 480p, and is recommended.</li>
+                <li>Scanlines funktionieren nur bei 240p-Quellen oder bei 480i mit Bob-Deinterlacing.</li>
+                <li>Der Linienfilter beseitigt blockartige Pixelartefakte beim Hochskalieren über 480p hinaus und wird empfohlen.</li>
               </ul>
               <div class="gbs-flex">
                 <button
@@ -1385,7 +1385,7 @@ section[name="alert"] {
                   class="gbs-button gbs-button__control gbs-button__secondary"
                 >
                   <div class="gbs-icon">blur_linear</div>
-                  <div>peaking</div>
+                  <div>Kantenanhebung</div>
                 </button>
                 <button
                   gbs-message="V"
@@ -1395,20 +1395,20 @@ section[name="alert"] {
                   class="gbs-button gbs-button__control gbs-button__secondary"
                 >
                   <div class="gbs-icon">grain</div>
-                  <div>step response</div>
+                  <div>Sprungantwort</div>
                 </button>
               </div>
               <ul class="gbs-help">
                 <!-- prettier-ignore -->
-                <li>Peaking increases contrast around horizontal brightness steps, and is recommended.</li>
-                <li>Step Response increases the sharpness of horizontal color steps, and is recommended.</li>
+                <li>Kantenanhebung erhöht den Kontrast an horizontalen Helligkeitssprüngen und wird empfohlen.</li>
+                <li>Sprungantwort erhöht die Schärfe an horizontalen Farbsprüngen und wird empfohlen.</li>
               </ul>
             </div>
           </fieldset>
           <fieldset class="gbs-fieldset filters">
             <legend class="gbs-fieldset__legend gbs-fieldset__legend--help">
               <div class="gbs-icon">wb_sunny</div>
-              <div>Color Correction</div>
+              <div>Farbkorrektur</div>
             </legend>
             <div class="gbs-flex">
               <button
@@ -1418,7 +1418,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">add_circle_outline</div>
-                <div>Brightness</div>
+                <div>Helligkeit</div>
               </button>
               <button
                 gbs-message="T"
@@ -1427,7 +1427,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">remove_circle_outline</div>
-                <div>Brightness</div>
+                <div>Helligkeit</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -1438,7 +1438,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">add_circle_outline</div>
-                <div>Contrast</div>
+                <div>Kontrast</div>
               </button>
               <button
                 gbs-message="M"
@@ -1447,7 +1447,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">remove_circle_outline</div>
-                <div>Contrast</div>
+                <div>Kontrast</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -1507,13 +1507,13 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">settings_backup_restore</div>
-                <div>Default</div>
+                <div>Standard</div>
               </button>
             </div>
             <ul class="gbs-help">
               <!-- prettier-ignore -->
-              <li>Pb/U gain - change blue-luma gain.</li>
-              <li>Pr/V gain - change red-luma gain.</li>
+              <li>Pb/U gain - ändert die Blau-Verstärkung.</li>
+              <li>Pr/V gain - ändert die Rot-Verstärkung.</li>
             </ul>
           </fieldset>
         </section>
@@ -1522,15 +1522,15 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset">
             <legend class="gbs-fieldset__legend gbs-fieldset__legend--help">
               <div class="gbs-icon">tune</div>
-              <div>Settings</div>
+              <div>Einstellungen</div>
             </legend>
             <table class="gbs-preferences">
               <tr>
                 <td>
-                  Matched Presets
+                  Passende Presets
                   <ul class="gbs-help">
                     <!-- prettier-ignore -->
-                    <li>If enabled, default to 1280x960 for NTSC 60 and 1280x1024 for PAL 50 (does not apply for 720p / 1080p presets).</li>
+                    <li>Wenn aktiviert, wird standardmäßig 1280x960 für NTSC 60 und 1280x1024 für PAL 50 verwendet (gilt nicht für 720p-/1080p-Presets).</li>
                   </ul>
                 </td>
                 <td
@@ -1545,11 +1545,11 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td>
-                  Full Height
+                  Volle Höhe
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>Some presets default to not using the entire vertical output resolution, leaving some lines black.</li>
-                    <li>With Full Height enabled, these presets will instead scale to fill more of the screen height.</li>
+                    <li>Manche Presets nutzen standardmäßig nicht die gesamte vertikale Ausgabeauflösung, wodurch einige Zeilen schwarz bleiben.</li>
+                    <li>Mit aktivierter Full-Height-Option skalieren diese Presets stattdessen so, dass mehr Bildschirmhöhe ausgefüllt wird.</li>
                     <li>(This currently only affects 1920 x 1080)</li>
                   </ul>
                 </td>
@@ -1565,11 +1565,11 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td>
-                  Reverse OLED menu rotary
+                  OLED-Menü-Drehregler umkehren
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>Some devices (e.g. ODV-GBS-C) need this on so clockwise rotation moves down in the OLED menu.</li>
-                    <li>Setting is saved on the device and kept across firmware updates.</li>
+                    <li>Manche Geräte (z. B. ODV-GBS-C) benötigen diese Option aktiviert, damit eine Drehung im Uhrzeigersinn im OLED-Menü nach unten bewegt.</li>
+                    <li>Die Einstellung wird auf dem Gerät gespeichert und bleibt über Firmware-Updates hinweg erhalten.</li>
                   </ul>
                 </td>
                 <td
@@ -1584,13 +1584,13 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td>
-                  Low Res: Use Upscaling
+                  Niedrige Auflösung: Hochskalieren verwenden
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>Low Resolution VGA input: Pass-through or Upscale</li>
-                    <li>Low resolution sources can be either passed on directly or get upscaled.</li>
-                    <li>Upscaling may have some border / scaling issues, but is more compatible with displays.</li>
-                    <li>Also, refresh rates other than 60Hz are not well supported yet.</li>
+                    <li>VGA-Eingang mit niedriger Auflösung: Durchreichen oder Hochskalieren</li>
+                    <li>Quellen mit niedriger Auflösung können entweder direkt durchgereicht oder hochskaliert werden.</li>
+                    <li>Beim Hochskalieren kann es zu kleineren Rand-/Skalierungsproblemen kommen, dafür ist die Kompatibilität mit Displays besser.</li>
+                    <li>Außerdem werden andere Bildwiederholraten als 60 Hz bisher nicht gut unterstützt.</li>
                     <li>"Low resolution" is currently set at below or equal to 640x480 (525 active lines).</li>
                   </ul>
                 </td>
@@ -1606,11 +1606,11 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td>
-                  Output RGBHV/Component
+                  Ausgabe RGBHV/Component
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>The default output mode is RGBHV, suitable for use with VGA cables or HDMI converters.</li>
-                    <li>An experimental YPbPr mode can also be selected. Compatibility is still spotty.</li>
+                    <li>Der Standard-Ausgabemodus ist RGBHV, geeignet für VGA-Kabel oder HDMI-Konverter.</li>
+                    <li>Es kann auch ein experimenteller YPbPr-Modus gewählt werden. Die Kompatibilität ist noch lückenhaft.</li>
                   </ul>
                 </td>
                 <td
@@ -1625,12 +1625,12 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td>
-                  Output Frame Rate: Force PAL 50Hz to 60Hz
+                  Ausgabe-Bildrate: PAL 50 Hz auf 60 Hz erzwingen
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
                     <li>If your TV does not support 50Hz sources (displaying unknown format, no matter the preset), try this option.
                     </li>
-                    <li>The frame rate will not be as smooth. Reboot required.</li>
+                    <li>Die Bildrate wird dadurch weniger flüssig. Neustart erforderlich.</li>
                   </ul>
                 </td>
                 <td
@@ -1645,10 +1645,10 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td>
-                  Disable External Clock Generator
+                  Externen Taktgenerator deaktivieren
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>By default the external clock generator is enabled when installed.</li>
+                    <li>Standardmäßig ist der externe Taktgenerator aktiviert, wenn er installiert ist.</li>
                     <li>You can disable it if you have issues with other options, e.g  Force PAL 50Hz to 60Hz.
                     Reboot required.</li>
                   </ul>
@@ -1665,11 +1665,11 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td>
-                  ADC calibration
+                  ADC-Kalibrierung
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>Gbscontrol calibrates the ADC offsets on startup.</li>
-                    <li>In case of color shift problems, try disabling this function.</li>
+                    <li>Gbscontrol kalibriert die ADC-Offsets beim Start.</li>
+                    <li>Bei Problemen mit Farbverschiebungen diese Funktion versuchsweise deaktivieren.</li>
                   </ul>
                 </td>
                 <td
@@ -1684,11 +1684,11 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td colspan="2" class="gbs-preferences__child">
-                  Active FrameTime Lock
+                  FrameTime Lock aktiv
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>This option keeps the input and output timings aligned, fixing the horizontal tear line that can appear sometimes.</li>
-                    <li>Two methods are available. Try switching methods if your display goes blank or shifts vertically.</li>
+                    <li>Diese Option hält Eingangs- und Ausgangstiming synchron und behebt den gelegentlich auftretenden horizontalen Bildriss.</li>
+                    <li>Es stehen zwei Methoden zur Verfügung. Bei schwarzem Bildschirm oder vertikalem Versatz die andere Methode ausprobieren.</li>
                   </ul>
                 </td>
               </tr>
@@ -1706,11 +1706,11 @@ section[name="alert"] {
               </tr>
               <tr gbs-ftl-method-rows hidden>
                 <td colspan="2" class="gbs-preferences__child">
-                  FrameTime Lock Method
+                  FrameTime-Lock-Methode
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
                     <li>VTotal + VSST: adjusts both vertical total and vertical sync start for precise locking.</li>
-                    <li>VTotal only: adjusts vertical total only, simpler approach.</li>
+                    <li>Nur VTotal: passt nur die vertikale Gesamtzeilenzahl an, einfacherer Ansatz.</li>
                   </ul>
                 </td>
               </tr>
@@ -1740,13 +1740,13 @@ section[name="alert"] {
               </tr>
               <tr>
                 <td colspan="2" class="gbs-preferences__child">
-                  Deinterlace Method
+                  Deinterlace-Methode
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>Gbscontrol detects interlaced content and automatically toggles deinterlacing.</li>
-                    <li>Bob Method: essentially no deinterlacing, no added lag but flickers, can be combined with scanlines</li>
-                    <li>Motion Adaptive: removes flicker and shows some artefacts in moving details</li>
-                    <li>If possible, configure the source for progressive output. Otherwise, using Motion Adaptive is recommended.</li>
+                    <li>Gbscontrol erkennt interlaced Inhalte und schaltet das Deinterlacing automatisch um.</li>
+                    <li>Bob-Methode: praktisch kein Deinterlacing, kein zusätzlicher Lag, flackert aber, kombinierbar mit Scanlines</li>
+                    <li>Motion Adaptive: entfernt Flackern, zeigt aber einige Artefakte bei bewegten Details</li>
+                    <li>Wenn möglich, die Quelle auf progressive Ausgabe einstellen. Andernfalls wird Motion Adaptive empfohlen.</li>
                   </ul>
                 </td>
               </tr>
@@ -1776,21 +1776,21 @@ section[name="alert"] {
               </tr>
               <tr gbs-dev-switch>
                 <td>
-                  Developer Mode
+                  Entwicklermodus
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>Enables the developer menu which contains various debugging tools</li>
+                    <li>Aktiviert das Entwicklermenü mit verschiedenen Debugging-Werkzeugen</li>
                   </ul>
                 </td>
                 <td class="gbs-icon">toggle_off</td>
               </tr>
               <tr gbs-slot-custom-filters>
                 <td>
-                  Save Filtering Per Slot
+                  Filterung pro Slot speichern
                   <!-- prettier-ignore -->
                   <ul class="gbs-help">
-                    <li>When enabled, saved slots recover their own filter preferences.</li>
-                    <li>When disabled, saved slots maintain current filter settings.</li>
+                    <li>Wenn aktiviert, stellen gespeicherte Slots ihre eigenen Filtereinstellungen wieder her.</li>
+                    <li>Wenn deaktiviert, behalten gespeicherte Slots die aktuellen Filtereinstellungen bei.</li>
                   </ul>
                 </td>
                 <td class="gbs-icon">toggle_off</td>
@@ -1803,12 +1803,12 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">input</div>
-              <div>Developer</div>
+              <div>Entwickler</div>
             </legend>
             <div class="gbs-flex gbs-margin__bottom--16">
               <button class="gbs-button" gbs-output-toggle>
                 <div class="gbs-icon">code</div>
-                <div>Toggle Console</div>
+                <div>Konsole umschalten</div>
               </button>
             </div>
             <div class="gbs-flex gbs-margin__bottom--16">
@@ -1819,7 +1819,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__secondary"
               >
                 <div class="gbs-icon">keyboard_arrow_left</div>
-                <div>MEM Left</div>
+                <div>MEM Links</div>
               </button>
               <button
                 gbs-message="+"
@@ -1828,7 +1828,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__secondary"
               >
                 <div class="gbs-icon">keyboard_arrow_right</div>
-                <div>MEM Right</div>
+                <div>MEM Rechts</div>
               </button>
               <button
                 gbs-message="1"
@@ -1837,7 +1837,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__secondary"
               >
                 <div class="gbs-icon">keyboard_arrow_left</div>
-                <div>HS Left</div>
+                <div>HS Links</div>
               </button>
               <button
                 gbs-message="0"
@@ -1846,7 +1846,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__secondary"
               >
                 <div class="gbs-icon">keyboard_arrow_right</div>
-                <div>HS Right</div>
+                <div>HS Rechts</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -1857,7 +1857,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">list</div>
-                <div>List Options</div>
+                <div>Optionen auflisten</div>
               </button>
               <button
                 gbs-message="i"
@@ -1866,7 +1866,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">info</div>
-                <div>Print Info</div>
+                <div>Info anzeigen</div>
               </button>
               <button
                 gbs-message=","
@@ -1875,7 +1875,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">alarm</div>
-                <div>Get Video Timings</div>
+                <div>Video-Timings abrufen</div>
               </button>
             </div>
 
@@ -1887,7 +1887,7 @@ section[name="alert"] {
                 class="gbs-button gbs-margin__bottom--16"
               >
                 <div class="gbs-icon">add_a_photo</div>
-                <div>Freeze Capture</div>
+                <div>Erfassung einfrieren</div>
               </button>
             </div>
 
@@ -1899,7 +1899,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">wb_sunny</div>
-                <div>ADC Filter</div>
+                <div>ADC-Filter</div>
               </button>
               <button
                 gbs-message="l"
@@ -1908,7 +1908,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">memory</div>
-                <div>Cycle SDRAM</div>
+                <div>SDRAM umschalten</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -1919,7 +1919,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">bug_report</div>
-                <div>Debug View</div>
+                <div>Debug-Ansicht</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -1948,7 +1948,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__secondary"
               >
                 <div class="gbs-icon">sync_problem</div>
-                <div>Resync HTotal</div>
+                <div>HTotal resynchronisieren</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -1968,7 +1968,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">invert_colors</div>
-                <div>Invert Sync</div>
+                <div>Sync invertieren</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -2019,7 +2019,7 @@ section[name="alert"] {
                 class="gbs-button"
               >
                 <div class="gbs-icon">bug_report</div>
-                <div>IF Auto Offset</div>
+                <div>IF Auto-Offset</div>
               </button>
             </div>
             <div class="gbs-flex">
@@ -2040,7 +2040,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__secondary"
               >
                 <div class="gbs-icon">model_training</div>
-                <div>Reset Chip</div>
+                <div>Chip zurücksetzen</div>
               </button>
             </div>
           </fieldset>
@@ -2060,7 +2060,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">system_update_alt</div>
-                <div>Enable OTA</div>
+                <div>OTA aktivieren</div>
               </button>
               <button
                 gbs-message="a"
@@ -2069,7 +2069,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control"
               >
                 <div class="gbs-icon">settings_backup_restore</div>
-                <div>Restart</div>
+                <div>Neustart</div>
               </button>
               <button
                 gbs-message="1"
@@ -2078,7 +2078,7 @@ section[name="alert"] {
                 class="gbs-button gbs-button__control gbs-button__secondary"
               >
                 <div class="gbs-icon">settings_backup_restore offline_bolt</div>
-                <div>Reset Defaults</div>
+                <div>Auf Standard zurücksetzen</div>
               </button>
             </div>
           </fieldset>
@@ -2089,9 +2089,9 @@ section[name="alert"] {
             </legend>
             <!-- prettier-ignore -->
             <ul class="gbs-help">
-              <li>Backup / Restore of configuration files</li>
-              <li>Backup is valid for current device only</li>
-              <!-- <li>Backup is valid between devices with the same hardware revision</li> -->
+              <li>Backup / Wiederherstellung der Konfigurationsdateien</li>
+              <li>Backup nur für das aktuelle Gerät gültig</li>
+              <!-- <li>Ein Backup ist zwischen Geräten mit derselben Hardware-Revision übertragbar</li> -->
             </ul>
             <div class="gbs-flex">
               <button
@@ -2105,14 +2105,14 @@ section[name="alert"] {
               >
                 <div class="gbs-icon">cloud_upload</div>
                 <input type="file" class="gbs-backup-input" accept=".bin"/>
-                <div gbs-progress gbs-progress-restore>Restore</div>
+                <div gbs-progress gbs-progress-restore>Wiederherstellen</div>
               </button>
             </div>
           </fieldset>
           <fieldset class="gbs-fieldset">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">wifi</div>
-              <div>Wi-Fi</div>
+              <div>WLAN</div>
             </legend>
 
             <div class="gbs-flex gbs-margin__bottom--16">
@@ -2128,14 +2128,14 @@ section[name="alert"] {
             <fieldset class="gbs-fieldset" gbs-wifi-list hidden>
               <legend class="gbs-fieldset__legend">
                 <div class="gbs-icon">router</div>
-                <div>Select SSID</div>
+                <div>SSID auswählen</div>
               </legend>
               <table class="gbs-wifi__list"></table>
             </fieldset>
             <fieldset class="gbs-fieldset gsb-wifi__connect" hidden>
               <legend class="gbs-fieldset__legend">
                 <div class="gbs-icon">login</div>
-                <div>Connect to SSID</div>
+                <div>Mit SSID verbinden</div>
               </legend>
               <div class="gbs-flex">
                 <input
@@ -2149,7 +2149,7 @@ section[name="alert"] {
               <div class="gbs-flex">
                 <input
                   class="gbs-button gbs-wifi__input"
-                  placeholder="password"
+                  placeholder="Passwort"
                   type="password"
                   gbs-input="password"
                 />
@@ -2160,7 +2160,36 @@ section[name="alert"] {
                   class="gbs-button gbs-button__control gbs-button__secondary"
                 >
                   <div class="gbs-icon">network_check</div>
-                  <div>Connect</div>
+                  <div>Verbinden</div>
+                </button>
+              </div>
+            </fieldset>
+            <fieldset class="gbs-fieldset">
+              <legend class="gbs-fieldset__legend">
+                <div class="gbs-icon">dns</div>
+                <div>Hostname (mDNS)</div>
+              </legend>
+              <ul class="gbs-help">
+                <!-- prettier-ignore -->
+                <li>Der über mDNS bekanntgegebene Hostname. Zugriff auf das Gerät unter &lt;hostname&gt;.local</li>
+                <li>Erlaubte Zeichen: Buchstaben, Ziffern, Bindestriche. Max. 32 Zeichen. Neustart erforderlich.</li>
+              </ul>
+              <div class="gbs-flex">
+                <input
+                  class="gbs-button gbs-wifi__input"
+                  type="text"
+                  maxlength="32"
+                  gbs-input="hostname"
+                  placeholder="gbscontrol"
+                />
+              </div>
+              <div class="gbs-flex">
+                <button
+                  gbs-hostname-save
+                  class="gbs-button gbs-button__control gbs-button__secondary"
+                >
+                  <div class="gbs-icon">save</div>
+                  <div>Speichern &amp; Neustart</div>
                 </button>
               </div>
             </fieldset>
@@ -2170,7 +2199,7 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">keyboard</div>
-              <div gbs-prompt-content>Prompt</div>
+              <div gbs-prompt-content>Eingabe</div>
             </legend>
             <div class="gbs-flex gbs-margin__bottom--16">
               <input
@@ -2183,7 +2212,7 @@ section[name="alert"] {
             <div class="gbs-flex">
               <button gbs-prompt-cancel class="gbs-button gbs-button__control">
                 <div class="gbs-icon">close</div>
-                <div>CANCEL</div>
+                <div>ABBRECHEN</div>
               </button>
               <button
                 gbs-prompt-ok
@@ -2199,7 +2228,7 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">warning</div>
-              <div>ALERT</div>
+              <div>HINWEIS</div>
             </legend>
             <div
               class="gbs-flex gbs-padding__hor-16 gbs-modal__message"
@@ -2221,7 +2250,7 @@ section[name="alert"] {
           <fieldset class="gbs-fieldset gbs-fieldset-output">
             <legend class="gbs-fieldset__legend">
               <div class="gbs-icon">code</div>
-              <div>Output</div>
+              <div>Ausgabe</div>
             </legend>
             <div class="gbs-flex gbs-margin__bottom--16" gbs-output-clear>
               <button class="gbs-button gbs-icon">delete_outline</button>
@@ -2375,6 +2404,8 @@ const GBSControl = {
         promptCancel: null,
         promptContent: null,
         promptInput: null,
+        hostnameInput: null,
+        hostnameSaveButton: null,
     },
     updateTerminalTimer: 0,
     webSocketServerUrl: "",
@@ -2618,9 +2649,9 @@ const savePreset = () => {
     }
     const key = currentSlot.getAttribute("gbs-element-ref");
     const currentIndex = currentSlot.getAttribute("gbs-slot-id");
-    gbsPrompt("Assign a slot name", GBSControl.structs.slots[currentIndex].name || key)
+    gbsPrompt("Slot-Namen vergeben", GBSControl.structs.slots[currentIndex].name || key)
         .then((currentName) => {
-        if (currentName && currentName.trim() !== "Empty") {
+        if (currentName && currentName.trim() !== "Leer") {
             currentSlot.setAttribute("gbs-name", currentName);
             fetch(`/slot/save?index=${currentIndex}&name=${currentName.substring(0, 24)}&${+new Date()}`).then(() => {
                 loadUser("4").then(() => {
@@ -2723,7 +2754,7 @@ const getSlotPresetName = (presetID) => {
             return "1920x1080";
         case 0x06:
         case 0x016:
-            return "DOWNSCALE";
+            return "VERKLEINERT";
         case 0x04:
             return "720x480";
         case 0x14:
@@ -2732,7 +2763,7 @@ const getSlotPresetName = (presetID) => {
         case 0x22: // bypass 2
             return "BYPASS";
         default:
-            return "CUSTOM";
+            return "EIGEN";
     }
 };
 const fetchSlotNamesErrorRetry = () => {
@@ -2747,6 +2778,7 @@ const fetchSlotNamesAndInit = () => {
         }
         initUIElements();
         wifiGetStatus().then(() => {
+            hostnameGet();
             initUI();
             updateSlotNames();
             createWebSocket();
@@ -2886,9 +2918,9 @@ const doBackup = () => {
         const backupFilesJSON = JSON.stringify(headerDescriptor);
         const backupFilesJSONSize = backupFilesJSON.length;
         const mainHeader = [
-            (backupFilesJSONSize >> 24) & 255, // size
-            (backupFilesJSONSize >> 16) & 255, // size
-            (backupFilesJSONSize >> 8) & 255, // size
+            (backupFilesJSONSize >> 24) & 255,
+            (backupFilesJSONSize >> 16) & 255,
+            (backupFilesJSONSize >> 8) & 255,
             (backupFilesJSONSize >> 0) & 255,
         ];
         const outputArray = [
@@ -2909,7 +2941,7 @@ const doRestore = (file) => {
     const headerCheck = fileBuffer.slice(4, 6);
     if (headerCheck[0] !== 0x7b || headerCheck[1] !== 0x22) {
         backupInput.setAttribute("disabled", "");
-        gbsAlert("Invalid Backup File")
+        gbsAlert("Ungültige Backup-Datei")
             .then(() => {
             backupInput.removeAttribute("disabled");
         }, () => {
@@ -2948,7 +2980,7 @@ const doRestore = (file) => {
     serial(funcs).then(() => {
         GBSControl.ui.progressRestore.setAttribute("gbs-progress", ``);
         loadUser("a").then(() => {
-            gbsAlert("Restarting GBSControl.\nPlease wait until wifi reconnects then click OK")
+            gbsAlert("GBSControl wird neu gestartet.\nBitte warten, bis WLAN wieder verbunden ist, dann OK klicken")
                 .then(() => {
                 window.location.reload();
             })
@@ -2987,7 +3019,7 @@ const wifiGetStatus = () => {
             GBSControl.ui.wifiApButton.classList.add("gbs-button__secondary");
             GBSControl.ui.wifiStaButton.removeAttribute("active", "");
             GBSControl.ui.wifiStaButton.classList.remove("gbs-button__secondary");
-            GBSControl.ui.wifiStaSSID.innerHTML = "STA | Scan Network";
+            GBSControl.ui.wifiStaSSID.innerHTML = "STA | Netzwerk suchen";
         }
         else {
             GBSControl.ui.wifiApButton.removeAttribute("active", "");
@@ -2997,6 +3029,37 @@ const wifiGetStatus = () => {
             GBSControl.ui.wifiStaSSID.innerHTML = `${GBSControl.wifi.ssid}`;
         }
     });
+};
+const hostnameGet = () => {
+    return fetch(`/hostname/get?${+new Date()}`)
+        .then((r) => r.json())
+        .then((data) => {
+        if (data.hostname) {
+            GBSControl.ui.hostnameInput.value = data.hostname;
+        }
+    })
+        .catch(() => { });
+};
+const hostnameSave = () => {
+    const hn = GBSControl.ui.hostnameInput.value.trim();
+    if (!hn.length ||
+        hn.length > 32 ||
+        !/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(hn)) {
+        gbsAlert("Ungültiger Hostname. Nur Buchstaben, Ziffern und Bindestriche erlaubt (kein Bindestrich am Anfang/Ende, max. 32 Zeichen).");
+        return;
+    }
+    const formData = new FormData();
+    formData.append("h", hn);
+    fetch("/hostname/set", { method: "POST", body: formData })
+        .then((r) => r.json())
+        .then((data) => {
+        gbsAlert(`Hostname auf '${data.hostname}' gesetzt. GBSControl startet neu.\nNach dem Neustart erreichbar unter http://${data.hostname}.local/`)
+            .then(() => {
+            window.location.href = `http://${data.hostname}.local/`;
+        })
+            .catch(() => { });
+    })
+        .catch(() => { });
 };
 const wifiConnect = () => {
     const ssid = GBSControl.ui.wifiSSDInput.value;
@@ -3012,7 +3075,7 @@ const wifiConnect = () => {
         method: "POST",
         body: formData,
     }).then(() => {
-        gbsAlert(`GBSControl will restart and will connect to ${ssid}. Please wait some seconds then press OK`)
+        gbsAlert(`GBSControl startet neu und verbindet sich mit ${ssid}. Bitte einige Sekunden warten und dann OK drücken`)
             .then(() => {
             window.location.href = "http://gbscontrol.local/";
         })
@@ -3029,7 +3092,7 @@ const wifiScanSSID = () => {
     };
     if (!GBSControl.scanSSIDDone) {
         GBSControl.scanSSIDRetries = 0;
-        showWiFiStatusRow("Scanning...");
+        showWiFiStatusRow("Suche läuft...");
         fetch(`/wifi/list?${+new Date()}`).then(() => {
             GBSControl.scanSSIDDone = true;
             setTimeout(wifiScanSSID, 3000);
@@ -3042,7 +3105,7 @@ const wifiScanSSID = () => {
         // Some scans can take longer than 3s; keep polling a few times if empty.
         if (!result.length && GBSControl.scanSSIDRetries < 10) {
             GBSControl.scanSSIDRetries++;
-            showWiFiStatusRow("Scanning...");
+            showWiFiStatusRow("Suche läuft...");
             setTimeout(wifiScanSSID, 1000);
             return null;
         }
@@ -3079,7 +3142,7 @@ const wifiScanSSID = () => {
             GBSControl.ui.wifiConnect.setAttribute("hidden", "");
         }
         else {
-            GBSControl.ui.wifiListTable.innerHTML = `<tr><td colspan="3" style="text-align:center;opacity:.8">No networks found</td></tr>`;
+            GBSControl.ui.wifiListTable.innerHTML = `<tr><td colspan="3" style="text-align:center;opacity:.8">Keine Netzwerke gefunden</td></tr>`;
         }
     });
 };
@@ -3100,7 +3163,7 @@ const wifiSetAPMode = () => {
         method: "POST",
         body: formData,
     }).then(() => {
-        gbsAlert("Switching to AP mode. Please connect to gbscontrol SSID and then click OK")
+        gbsAlert("Wechsle in den AP-Modus. Bitte mit der SSID \"gbscontrol\" verbinden und dann OK klicken")
             .then(() => {
             window.location.href = "http://192.168.4.1";
         })
@@ -3252,6 +3315,8 @@ const initUIElements = () => {
         promptCancel: document.querySelector("[gbs-prompt-cancel]"),
         promptContent: document.querySelector("[gbs-prompt-content]"),
         promptInput: document.querySelector('[gbs-input="prompt-input"]'),
+        hostnameInput: document.querySelector('[gbs-input="hostname"]'),
+        hostnameSaveButton: document.querySelector("[gbs-hostname-save]"),
     };
 };
 const initGeneralListeners = () => {
@@ -3268,6 +3333,7 @@ const initGeneralListeners = () => {
     GBSControl.ui.wifiConnectButton.addEventListener("click", wifiConnect);
     GBSControl.ui.wifiApButton.addEventListener("click", wifiSetAPMode);
     GBSControl.ui.wifiStaButton.addEventListener("click", wifiScanSSID);
+    GBSControl.ui.hostnameSaveButton.addEventListener("click", hostnameSave);
     GBSControl.ui.developerSwitch.addEventListener("click", toggleDeveloperMode);
     GBSControl.ui.customSlotFilters.addEventListener("click", toggleCustomSlotFilters);
     GBSControl.ui.alertOk.addEventListener("click", () => {

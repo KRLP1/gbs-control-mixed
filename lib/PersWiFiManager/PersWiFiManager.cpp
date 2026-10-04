@@ -14,6 +14,7 @@ static const char wifi_htm[] PROGMEM = "NOT_USED"; // Dummy to satisfy unused va
 
 extern const char *device_hostname_full;
 extern const char *device_hostname_partial;
+extern String device_hostname;
 // Handled in header/source already
 
 
@@ -55,9 +56,9 @@ bool PersWiFiManager::attemptConnection(const String &ssid, const String &pass)
     WiFi.mode(WIFI_STA);
     delay(200); // Increased delay for stability
 #ifdef ESP8266
-    WiFi.hostname(device_hostname_partial); // _full // before WiFi.begin();
+    WiFi.hostname(device_hostname.c_str()); // before WiFi.begin();
 #else
-    WiFi.setHostname(device_hostname_partial);
+    WiFi.setHostname(device_hostname.c_str());
 #endif
     delay(100); // Give time for hostname to be set
     

@@ -84,6 +84,10 @@ struct runTimeOptions
     bool boardHasPower;
     bool presetIsPalForce60;
     bool syncTypeCsync;
+    bool vsyncFlagUnreliable; // set by probeDiscreteVSync(): a discrete VSync was found only by
+                              // counting lines, not via the chip's own VSACT flag - relevant for
+                              // sources like Amstrad/Schneider CPC (csync) or Atari ST high-res
+                              // mono, where the chip's flag alone can misjudge the sync type.
     bool isValidForScalingRGBHV;
     bool useHdmiSyncFix;
     bool extClockGenDetected;

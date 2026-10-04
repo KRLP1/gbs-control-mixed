@@ -3,7 +3,18 @@
 #include <Arduino.h>
 
 void SerialMirror::flushToWebSocket() {
-    if (wsBufferPos > 0 && ESP.getFreeHeap() > 10000) {
+    // Backported from JuergenLeber/gbs-control. Hysteresis instead of a single 10000 threshold:
+    // heap idling near that line made every flush call re-evaluate the same boundary and flip
+    // broadcasting on/off roughly every FLUSH_INTERVAL_MS, so the debug window filled in with
+    // gaps rather than either working or (as intended, see WebServer.cpp) going quiet outright.
+    static bool broadcastEnabled = true;
+    uint32_t freeHeap = ESP.getFreeHeap();
+    if (broadcastEnabled && freeHeap < 8000) {
+        broadcastEnabled = false;
+    } else if (!broadcastEnabled && freeHeap > 12000) {
+        broadcastEnabled = true;
+    }
+    if (wsBufferPos > 0 && broadcastEnabled) {
         webSocket.broadcastTXT((uint8_t*)wsBuffer, wsBufferPos);
     }
     wsBufferPos = 0;

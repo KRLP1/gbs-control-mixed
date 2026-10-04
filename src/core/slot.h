@@ -3,7 +3,7 @@
 // SLOTS
 #define SLOTS_FILE "/slots.bin" // the file where to store slots metadata
 #define SLOTS_TOTAL 72          // max number of slots
-#define EMPTY_SLOT_NAME "Empty                   "
+#define EMPTY_SLOT_NAME "Leer                    "
 typedef struct
 {
     char name[25];

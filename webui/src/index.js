@@ -132,6 +132,8 @@ const GBSControl = {
         promptCancel: null,
         promptContent: null,
         promptInput: null,
+        hostnameInput: null,
+        hostnameSaveButton: null,
     },
     updateTerminalTimer: 0,
     webSocketServerUrl: "",
@@ -375,9 +377,9 @@ const savePreset = () => {
     }
     const key = currentSlot.getAttribute("gbs-element-ref");
     const currentIndex = currentSlot.getAttribute("gbs-slot-id");
-    gbsPrompt("Assign a slot name", GBSControl.structs.slots[currentIndex].name || key)
+    gbsPrompt("Slot-Namen vergeben", GBSControl.structs.slots[currentIndex].name || key)
         .then((currentName) => {
-        if (currentName && currentName.trim() !== "Empty") {
+        if (currentName && currentName.trim() !== "Leer") {
             currentSlot.setAttribute("gbs-name", currentName);
             fetch(`/slot/save?index=${currentIndex}&name=${currentName.substring(0, 24)}&${+new Date()}`).then(() => {
                 loadUser("4").then(() => {
@@ -480,7 +482,7 @@ const getSlotPresetName = (presetID) => {
             return "1920x1080";
         case 0x06:
         case 0x016:
-            return "DOWNSCALE";
+            return "VERKLEINERT";
         case 0x04:
             return "720x480";
         case 0x14:
@@ -489,7 +491,7 @@ const getSlotPresetName = (presetID) => {
         case 0x22: // bypass 2
             return "BYPASS";
         default:
-            return "CUSTOM";
+            return "EIGEN";
     }
 };
 const fetchSlotNamesErrorRetry = () => {
@@ -504,6 +506,7 @@ const fetchSlotNamesAndInit = () => {
         }
         initUIElements();
         wifiGetStatus().then(() => {
+            hostnameGet();
             initUI();
             updateSlotNames();
             createWebSocket();
@@ -643,9 +646,9 @@ const doBackup = () => {
         const backupFilesJSON = JSON.stringify(headerDescriptor);
         const backupFilesJSONSize = backupFilesJSON.length;
         const mainHeader = [
-            (backupFilesJSONSize >> 24) & 255, // size
-            (backupFilesJSONSize >> 16) & 255, // size
-            (backupFilesJSONSize >> 8) & 255, // size
+            (backupFilesJSONSize >> 24) & 255,
+            (backupFilesJSONSize >> 16) & 255,
+            (backupFilesJSONSize >> 8) & 255,
             (backupFilesJSONSize >> 0) & 255,
         ];
         const outputArray = [
@@ -666,7 +669,7 @@ const doRestore = (file) => {
     const headerCheck = fileBuffer.slice(4, 6);
     if (headerCheck[0] !== 0x7b || headerCheck[1] !== 0x22) {
         backupInput.setAttribute("disabled", "");
-        gbsAlert("Invalid Backup File")
+        gbsAlert("Ungültige Backup-Datei")
             .then(() => {
             backupInput.removeAttribute("disabled");
         }, () => {
@@ -705,7 +708,7 @@ const doRestore = (file) => {
     serial(funcs).then(() => {
         GBSControl.ui.progressRestore.setAttribute("gbs-progress", ``);
         loadUser("a").then(() => {
-            gbsAlert("Restarting GBSControl.\nPlease wait until wifi reconnects then click OK")
+            gbsAlert("GBSControl wird neu gestartet.\nBitte warten, bis WLAN wieder verbunden ist, dann OK klicken")
                 .then(() => {
                 window.location.reload();
             })
@@ -744,7 +747,7 @@ const wifiGetStatus = () => {
             GBSControl.ui.wifiApButton.classList.add("gbs-button__secondary");
             GBSControl.ui.wifiStaButton.removeAttribute("active", "");
             GBSControl.ui.wifiStaButton.classList.remove("gbs-button__secondary");
-            GBSControl.ui.wifiStaSSID.innerHTML = "STA | Scan Network";
+            GBSControl.ui.wifiStaSSID.innerHTML = "STA | Netzwerk suchen";
         }
         else {
             GBSControl.ui.wifiApButton.removeAttribute("active", "");
@@ -754,6 +757,37 @@ const wifiGetStatus = () => {
             GBSControl.ui.wifiStaSSID.innerHTML = `${GBSControl.wifi.ssid}`;
         }
     });
+};
+const hostnameGet = () => {
+    return fetch(`/hostname/get?${+new Date()}`)
+        .then((r) => r.json())
+        .then((data) => {
+        if (data.hostname) {
+            GBSControl.ui.hostnameInput.value = data.hostname;
+        }
+    })
+        .catch(() => { });
+};
+const hostnameSave = () => {
+    const hn = GBSControl.ui.hostnameInput.value.trim();
+    if (!hn.length ||
+        hn.length > 32 ||
+        !/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(hn)) {
+        gbsAlert("Ungültiger Hostname. Nur Buchstaben, Ziffern und Bindestriche erlaubt (kein Bindestrich am Anfang/Ende, max. 32 Zeichen).");
+        return;
+    }
+    const formData = new FormData();
+    formData.append("h", hn);
+    fetch("/hostname/set", { method: "POST", body: formData })
+        .then((r) => r.json())
+        .then((data) => {
+        gbsAlert(`Hostname auf '${data.hostname}' gesetzt. GBSControl startet neu.\nNach dem Neustart erreichbar unter http://${data.hostname}.local/`)
+            .then(() => {
+            window.location.href = `http://${data.hostname}.local/`;
+        })
+            .catch(() => { });
+    })
+        .catch(() => { });
 };
 const wifiConnect = () => {
     const ssid = GBSControl.ui.wifiSSDInput.value;
@@ -769,7 +803,7 @@ const wifiConnect = () => {
         method: "POST",
         body: formData,
     }).then(() => {
-        gbsAlert(`GBSControl will restart and will connect to ${ssid}. Please wait some seconds then press OK`)
+        gbsAlert(`GBSControl startet neu und verbindet sich mit ${ssid}. Bitte einige Sekunden warten und dann OK drücken`)
             .then(() => {
             window.location.href = "http://gbscontrol.local/";
         })
@@ -786,7 +820,7 @@ const wifiScanSSID = () => {
     };
     if (!GBSControl.scanSSIDDone) {
         GBSControl.scanSSIDRetries = 0;
-        showWiFiStatusRow("Scanning...");
+        showWiFiStatusRow("Suche läuft...");
         fetch(`/wifi/list?${+new Date()}`).then(() => {
             GBSControl.scanSSIDDone = true;
             setTimeout(wifiScanSSID, 3000);
@@ -799,7 +833,7 @@ const wifiScanSSID = () => {
         // Some scans can take longer than 3s; keep polling a few times if empty.
         if (!result.length && GBSControl.scanSSIDRetries < 10) {
             GBSControl.scanSSIDRetries++;
-            showWiFiStatusRow("Scanning...");
+            showWiFiStatusRow("Suche läuft...");
             setTimeout(wifiScanSSID, 1000);
             return null;
         }
@@ -836,7 +870,7 @@ const wifiScanSSID = () => {
             GBSControl.ui.wifiConnect.setAttribute("hidden", "");
         }
         else {
-            GBSControl.ui.wifiListTable.innerHTML = `<tr><td colspan="3" style="text-align:center;opacity:.8">No networks found</td></tr>`;
+            GBSControl.ui.wifiListTable.innerHTML = `<tr><td colspan="3" style="text-align:center;opacity:.8">Keine Netzwerke gefunden</td></tr>`;
         }
     });
 };
@@ -857,7 +891,7 @@ const wifiSetAPMode = () => {
         method: "POST",
         body: formData,
     }).then(() => {
-        gbsAlert("Switching to AP mode. Please connect to gbscontrol SSID and then click OK")
+        gbsAlert("Wechsle in den AP-Modus. Bitte mit der SSID \"gbscontrol\" verbinden und dann OK klicken")
             .then(() => {
             window.location.href = "http://192.168.4.1";
         })
@@ -1009,6 +1043,8 @@ const initUIElements = () => {
         promptCancel: document.querySelector("[gbs-prompt-cancel]"),
         promptContent: document.querySelector("[gbs-prompt-content]"),
         promptInput: document.querySelector('[gbs-input="prompt-input"]'),
+        hostnameInput: document.querySelector('[gbs-input="hostname"]'),
+        hostnameSaveButton: document.querySelector("[gbs-hostname-save]"),
     };
 };
 const initGeneralListeners = () => {
@@ -1025,6 +1061,7 @@ const initGeneralListeners = () => {
     GBSControl.ui.wifiConnectButton.addEventListener("click", wifiConnect);
     GBSControl.ui.wifiApButton.addEventListener("click", wifiSetAPMode);
     GBSControl.ui.wifiStaButton.addEventListener("click", wifiScanSSID);
+    GBSControl.ui.hostnameSaveButton.addEventListener("click", hostnameSave);
     GBSControl.ui.developerSwitch.addEventListener("click", toggleDeveloperMode);
     GBSControl.ui.customSlotFilters.addEventListener("click", toggleCustomSlotFilters);
     GBSControl.ui.alertOk.addEventListener("click", () => {

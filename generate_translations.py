@@ -23,6 +23,7 @@ menu_items = [
     {
         "tag": "OM_STATUS_CUSTOM",
         "en-US": "Main Menu",
+        "de-DE": "Hauptmenü",
         "zh-CN": "主菜单",
         # should not be larger than 12 (or adjust according to MENU_STATUS_BAR_HEIGHT)
         "size": 12,
@@ -30,192 +31,234 @@ menu_items = [
     {
         "tag": "OM_STATUS_BAR_BACK",
         "en-US": "←Back",
+        "de-DE": "←Zurück",
         # should not be larger than 12 (or adjust according to MENU_STATUS_BAR_HEIGHT)
         "size": 12
     },
     {
         "tag": "OM_SCREEN_SAVER",
         "en-US": "Press Any Key",
+        "de-DE": "Taste drücken",
     },
     {
         "tag": "OM_RESOLUTION",
         "en-US": "Resolutions",
+        "de-DE": "Auflösungen",
     },
     {
         "tag": "OM_PASSTHROUGH",
         "en-US": "Passthrough",
+        "de-DE": "Durchleitung",
     },
     {
         "tag": "OM_DOWNSCALE",
         "en-US": "Down-Scale",
+        "de-DE": "Verkleinern",
     },
     {
         "tag": "OM_PRESET",
         "en-US": "Presets",
+        "de-DE": "Presets",
     },
     {
         "tag": "OM_RESET_RESTORE",
         "en-US": "Reset/Restore",
+        "de-DE": "Zurücksetzen",
     },
     {
         "tag": "OM_RESET_GBS",
         "en-US": "Reset GBS",
+        "de-DE": "GBS-Reset",
     },
     {
         "tag": "OM_RESET_WIFI",
         "en-US": "Clear WiFi Connections",
+        "de-DE": "WLAN löschen",
     },
     {
         "tag": "OM_RESTORE_FACTORY",
         "en-US": "Restore Factory",
+        "de-DE": "Werkseinstellung",
     },
     {
         "tag": "OM_CURRENT",
         "en-US": "Current Output",
+        "de-DE": "Aktuelle Ausgabe",
     },
     {
         "tag": "OM_WIFI",
         "en-US": "WiFi Info",
+        "de-DE": "WLAN-Info",
     },
     {
         "tag": "TEXT_NO_PRESETS",
         "en-US": "No Presets. Please use the Web UI to create one first.",
+        "de-DE": "Keine Presets. Bitte zuerst in der Web-Oberfläche eins erstellen.",
     },
     {
         "tag": "TEXT_TOO_MANY_PRESETS",
         "en-US": "Please use WebUI to access more presets.",
+        "de-DE": "Bitte die Web-Oberfläche für weitere Presets nutzen.",
     },
     {
         "tag": "TEXT_RESETTING_GBS",
         "en-US": "Resetting GBS\nPlease wait\n...",
+        "de-DE": "GBS wird\nzurückgesetzt\n...",
         "size": 14,
     },
     {
         "tag": "TEXT_RESETTING_WIFI",
         "en-US": "Resetting WiFi\nPlease wait\n...",
+        "de-DE": "WLAN wird\nzurückgesetzt\n...",
         "size": 12,
     },
     {
         "tag": "TEXT_RESTORING",
         "en-US": "Factory Restoring\nPlease wait\n...",
+        "de-DE": "Werksreset läuft\nBitte warten\n...",
         "size": 12,
     },
     {
         "tag": "TEXT_WIFI_CONNECT_TO",
         "en-US": "Connect to the following SSID (password) before using the Web UI",
+        "de-DE": "Vor Nutzung der Web-Oberfläche mit dieser SSID (Passwort) verbinden",
     },
     {
         "tag": "TEXT_WIFI_CONNECTED",
         "en-US": "Status: Connected",
+        "de-DE": "Status: Verbunden",
     },
     {
         "tag": "TEXT_WIFI_DISCONNECTED",
         "en-US": "Status: Disconnected",
+        "de-DE": "Status: Getrennt",
     },
     {
         "tag": "TEXT_WIFI_URL",
         "en-US": "Use one of the following URLs to use the Web UI",
+        "de-DE": "Eine dieser URLs für die Web-Oberfläche nutzen",
     },
     {
         "tag": "TEXT_LOADED",
         "en-US": "Loaded",
+        "de-DE": "Geladen",
         "size": 16
     },
     {
         "tag": "TEXT_NO_INPUT",
         "en-US": "No Input",
+        "de-DE": "Kein Signal",
         "size": 16
     },
     {
         "tag": "OM_OSD",
         "en-US": "Open OSD Menu",
+        "de-DE": "OSD-Menü öffnen",
     },
     {
         "tag": "OM_SYSTEM",
         "en-US": "System",
+        "de-DE": "System",
     },
     {
         "tag": "OM_CHECK_UPDATE",
         "en-US": "Check for Update",
+        "de-DE": "Nach Update suchen",
     },
     {
         "tag": "TEXT_CHECKING",
         "en-US": "Checking...",
+        "de-DE": "Prüfe...",
         "size": 16,
     },
     {
         "tag": "TEXT_UP_TO_DATE",
         "en-US": "Up to date!",
+        "de-DE": "Aktuell!",
         "size": 16,
     },
     {
         "tag": "TEXT_WIFI_NOT_CONNECTED",
         "en-US": "WiFi not connected",
+        "de-DE": "WLAN getrennt",
         "size": 12,
     },
     {
         "tag": "TEXT_CHECK_FAILED",
         "en-US": "Check failed",
+        "de-DE": "Prüfung fehlg.",
         "size": 16,
     },
     {
         "tag": "TEXT_UPDATE_FOUND",
         "en-US": "Update found!",
+        "de-DE": "Neues Update!",
         "size": 16,
     },
     {
         "tag": "TEXT_DOWNLOADING",
         "en-US": "Downloading...",
+        "de-DE": "Lade herunter...",
         "size": 12,
     },
     {
         "tag": "TEXT_UPDATE_SUCCESS",
         "en-US": "Update Success!",
+        "de-DE": "Update erfolgreich!",
         "size": 12,
     },
     {
         "tag": "TEXT_REBOOTING",
         "en-US": "Rebooting...",
+        "de-DE": "Neustart...",
         "size": 12,
     },
     {
         "tag": "TEXT_UPDATE_FAILED",
         "en-US": "Update failed",
+        "de-DE": "Update fehlg.",
         "size": 16,
     },
     {
         "tag": "TEXT_DOWNLOAD_FAILED",
         "en-US": "Download failed",
+        "de-DE": "Download fehlg.",
         "size": 12,
     },
     {
         "tag": "TEXT_FLASH_FAILED",
         "en-US": "Flash failed",
+        "de-DE": "Flash fehlg.",
         "size": 16,
     },
     {
         "tag": "TEXT_CHECKSUM_ERROR",
         "en-US": "Checksum error",
+        "de-DE": "Prüfsummenfehler",
         "size": 12,
     },
     {
         "tag": "TEXT_SHA256_MISMATCH",
         "en-US": "SHA256 mismatch",
+        "de-DE": "SHA256 falsch",
         "size": 10,
     },
     {
         "tag": "TEXT_NOT_ENOUGH_SPACE",
         "en-US": "Not enough space",
+        "de-DE": "Nicht genug Platz",
         "size": 12,
     },
     {
         "tag": "TEXT_FREE_FLASH_MEMORY",
         "en-US": "Free flash memory",
+        "de-DE": "Freier Speicher",
         "size": 10,
     },
     {
         "tag": "TEXT_UNKNOWN_ERROR",
         "en-US": "Unknown error",
+        "de-DE": "Unbek. Fehler",
         "size": 10,
     },
 
