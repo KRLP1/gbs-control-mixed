@@ -435,7 +435,9 @@ void applyPresets(uint8_t result)
     }
 
     if (uopt->PalForce60 == 1) {
-        if (uopt->presetPreference != 2) { // != custom. custom saved as pal preset has ntsc customization
+        // Windowbox-Ausnahme: PAL-Variante ist ein sauberes 1080p50-Design
+        // und soll nicht nach NTSC konvertiert werden
+        if (uopt->presetPreference != 2 && uopt->presetPreference != Output960PWindowbox) {
             if (result == 2 || result == 4) {
                 Serial.println(F("PAL@50 to 60Hz"));
                 rto->presetIsPalForce60 = 1;
@@ -497,6 +499,12 @@ void applyPresets(uint8_t result)
             writeProgramArrayNew(ntsc_1920x1080, false);
         } else if (uopt->presetPreference == 6) {
             writeProgramArrayNew(ntsc_downscale, false);
+        } else if (uopt->presetPreference == Output960PWindowbox) {
+            if (waitExtra) {
+                delay(400);
+            }
+            applyWindowbox960(result);
+            return;
         }
     } else if (result == 2 || result == 4) {
         // PAL input
@@ -527,6 +535,12 @@ void applyPresets(uint8_t result)
             writeProgramArrayNew(pal_1920x1080, false);
         } else if (uopt->presetPreference == 6) {
             writeProgramArrayNew(pal_downscale, false);
+        } else if (uopt->presetPreference == Output960PWindowbox) {
+            if (waitExtra) {
+                delay(400);
+            }
+            applyWindowbox960(result);
+            return;
         }
     } else if (result == 5 || result == 6 || result == 7 || result == 13) {
         // use bypass mode for these HD sources
@@ -1511,6 +1525,8 @@ void doPostPresetLoadSteps()
         SerialM.print(F("720x480"));
     else if (rto->presetID == 0x14)
         SerialM.print(F("768x576"));
+    else if (rto->presetID == 0x07)
+        SerialM.print(F("1080p 4:3"));
     else
         SerialM.print(F("bypass"));
 

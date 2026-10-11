@@ -28,6 +28,7 @@
 // Leaves the HV input and sync mode registers as it found them.
 boolean probeDiscreteVSync(uint16_t *measuredLines)
 {
+
     typedef TV5725<GBS_ADDR> GBS;
 
     uint8_t extSyncBackup = GBS::SP_EXT_SYNC_SEL::read();

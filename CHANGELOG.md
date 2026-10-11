@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.1.0 – 960p Windowbox Release
+
+### Added
+- **960p Windowbox ("1080p 4:3") preset for PAL and NTSC** – 240p/288p sources
+  are integer-scaled (4x) to 960 lines in a 1080p frame
+  - Automatic PAL/NTSC detection on format change and at startup
+  - Available via OLED menu, web interface and serial command `B`
+  - Custom preset slots can store the full windowbox state (Preset-ID 0x07)
+  - PAL: 4:3 geometry via PLLAD_MD 2373 – **only change PLLAD_MD together
+    with the PLLAD_VCORST reset sequence (1/20ms/0/100ms), otherwise the
+    output turns green**
+  - IF_VB fixed at 60/62, independent of the Full Height option
+  - Tested with SNES 240p/288p (RGB); 480i/576i untested
+  - Window geometry calibrated on a 32" display
+
+### Fixed
+- Web UI: deleting custom presets did not work in v1.0.1; deletion now works
+
 ## v1.0.1
 
 - Completed the German translation of the web UI: 9 remaining English help texts

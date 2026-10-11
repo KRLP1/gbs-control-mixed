@@ -138,6 +138,16 @@
               </button>
               <button
                 class="gbs-button gbs-button__resolution"
+                gbs-message="B"
+                gbs-message-type="action"
+                gbs-click="normal"
+                gbs-element-ref="button1080p43"
+                gbs-role="preset"
+              >
+                1080 <span>4:3</span>
+              </button>
+              <button
+                class="gbs-button gbs-button__resolution"
                 gbs-message="p"
                 gbs-message-type="user"
                 gbs-click="normal"

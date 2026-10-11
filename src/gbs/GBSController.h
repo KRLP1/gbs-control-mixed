@@ -9,6 +9,7 @@
 
 // Main GBS controller functions
 void applyPresets(uint8_t result);
+void applyWindowbox960(uint8_t videoMode);
 void doPostPresetLoadSteps();
 void resetPLLAD();
 void latchPLLAD();

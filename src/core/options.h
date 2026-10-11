@@ -10,6 +10,7 @@ enum PresetPreference : uint8_t {
     Output1024P = 4,
     Output1080P = 5,
     OutputDownscale = 6,
+    Output960PWindowbox = 7,
     OutputBypass = 10,
 };
 

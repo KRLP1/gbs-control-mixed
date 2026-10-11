@@ -9,6 +9,7 @@ enum MenuItemTag: uint16_t {
     MT1280x1024,
     MT1280x720,
     MT1920x1080,
+    MT1080x960W,
     MT_480s576,
     MT_DOWNSCALE,
     MT_BYPASS,

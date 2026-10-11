@@ -326,6 +326,15 @@ void startWebserver()
             }
             else
             {
+                // ROOT-CAUSE FIX: allocate the slot metadata buffer.
+                // The original port missed this allocation here, leaving slotsObject
+                // as nullptr, which made the file read below always fail.
+                SlotsScratch scratch;
+                if (!scratch.ok()) {
+                    request->send(200, "application/json", "false");
+                    return;
+                }
+
                 Ascii8 slot = uopt->presetSlot;
                 Ascii8 nextSlot;
                 auto currentSlot = slotIndexMap.indexOf(slot);
@@ -338,18 +347,19 @@ void startWebserver()
                     slotsBinaryFileRead.close();
                 }
 
-                // currentSlot is -1 whenever presetSlot holds anything that is not a slot
-                // character, and a missing or short file leaves slotsObject as stack garbage,
-                // which the write at the end of this handler would persist as the new slot file.
-                if (currentSlot < 0 || slotsRead != sizeof(*slotsObject)) {
-                    SerialM.println(F("slot remove: slot data unreadable, aborting"));
-                    request->send(200, "application/json", "false");
-                    return;
+                // SAFETY NET: when slot metadata is unreadable, still allow file deletion.
+                // Only the slot-shift logic (which requires valid metadata) is skipped.
+                // With the scratch buffer fix above, this should rarely trigger - it catches
+                // genuinely corrupted metadata files.
+                bool slotsMetadataOk = (currentSlot >= 0 && slotsRead == sizeof(*slotsObject));
+                if (!slotsMetadataOk) {
+                    SerialM.println(F("slot remove: slot data unreadable, forcing delete"));
                 }
+                String slotName = slotsMetadataOk
+                    ? String(slotsObject->slot[currentSlot].name)
+                    : String("(unknown)");
 
-                String slotName = slotsObject->slot[currentSlot].name;
-
-                // remove preset files
+                // remove preset files (always, even if metadata is unreadable)
                 LittleFS.remove("/preset_ntsc." + String((char)slot));
                 LittleFS.remove("/preset_pal." + String((char)slot));
                 LittleFS.remove("/preset_ntsc_480p." + String((char)slot));
@@ -360,40 +370,44 @@ void startWebserver()
                 LittleFS.remove("/preset_vga_upscale." + String((char)slot));
                 LittleFS.remove("/preset_unknown." + String((char)slot));
 
-                uint8_t loopCount = 0;
-                uint8_t flag = 1;
-                // shifting the remaining slots down reads one entry ahead, so it has to stop
-                // before that read leaves the array - slot[] holds SLOTS_TOTAL entries
-                while (flag != 0 && (currentSlot + loopCount + 1) < SLOTS_TOTAL)
-                {
-                    slot = slotIndexMap[currentSlot + loopCount];
-                    nextSlot = slotIndexMap[currentSlot + loopCount + 1];
-                    flag = 0;
-                    flag += LittleFS.rename("/preset_ntsc." + String((char)(nextSlot)), "/preset_ntsc." + String((char)slot));
-                    flag += LittleFS.rename("/preset_pal." + String((char)(nextSlot)), "/preset_pal." + String((char)slot));
-                    flag += LittleFS.rename("/preset_ntsc_480p." + String((char)(nextSlot)), "/preset_ntsc_480p." + String((char)slot));
-                    flag += LittleFS.rename("/preset_pal_576p." + String((char)(nextSlot)), "/preset_pal_576p." + String((char)slot));
-                    flag += LittleFS.rename("/preset_ntsc_720p." + String((char)(nextSlot)), "/preset_ntsc_720p." + String((char)slot));
-                    flag += LittleFS.rename("/preset_ntsc_1080p." + String((char)(nextSlot)), "/preset_ntsc_1080p." + String((char)slot));
-                    flag += LittleFS.rename("/preset_medium_res." + String((char)(nextSlot)), "/preset_medium_res." + String((char)slot));
-                    flag += LittleFS.rename("/preset_vga_upscale." + String((char)(nextSlot)), "/preset_vga_upscale." + String((char)slot));
-                    flag += LittleFS.rename("/preset_unknown." + String((char)(nextSlot)), "/preset_unknown." + String((char)slot));
+                if (slotsMetadataOk) {
+                    // Only shift slots when metadata is valid
+                    uint8_t loopCount = 0;
+                    uint8_t flag = 1;
+                    // shifting the remaining slots down reads one entry ahead, so it has to stop
+                    // before that read leaves the array - slot[] holds SLOTS_TOTAL entries
+                    while (flag != 0 && (currentSlot + loopCount + 1) < SLOTS_TOTAL)
+                    {
+                        slot = slotIndexMap[currentSlot + loopCount];
+                        nextSlot = slotIndexMap[currentSlot + loopCount + 1];
+                        flag = 0;
+                        flag += LittleFS.rename("/preset_ntsc." + String((char)(nextSlot)), "/preset_ntsc." + String((char)slot));
+                        flag += LittleFS.rename("/preset_pal." + String((char)(nextSlot)), "/preset_pal." + String((char)slot));
+                        flag += LittleFS.rename("/preset_ntsc_480p." + String((char)(nextSlot)), "/preset_ntsc_480p." + String((char)slot));
+                        flag += LittleFS.rename("/preset_pal_576p." + String((char)(nextSlot)), "/preset_pal_576p." + String((char)slot));
+                        flag += LittleFS.rename("/preset_ntsc_720p." + String((char)(nextSlot)), "/preset_ntsc_720p." + String((char)slot));
+                        flag += LittleFS.rename("/preset_ntsc_1080p." + String((char)(nextSlot)), "/preset_ntsc_1080p." + String((char)slot));
+                        flag += LittleFS.rename("/preset_medium_res." + String((char)(nextSlot)), "/preset_medium_res." + String((char)slot));
+                        flag += LittleFS.rename("/preset_vga_upscale." + String((char)(nextSlot)), "/preset_vga_upscale." + String((char)slot));
+                        flag += LittleFS.rename("/preset_unknown." + String((char)(nextSlot)), "/preset_unknown." + String((char)slot));
 
-                    slotsObject->slot[currentSlot + loopCount].slot = slotsObject->slot[currentSlot + loopCount + 1].slot;
-                    slotsObject->slot[currentSlot + loopCount].presetID = slotsObject->slot[currentSlot + loopCount + 1].presetID;
-                    slotsObject->slot[currentSlot + loopCount].scanlines = slotsObject->slot[currentSlot + loopCount + 1].scanlines;
-                    slotsObject->slot[currentSlot + loopCount].scanlinesStrength = slotsObject->slot[currentSlot + loopCount + 1].scanlinesStrength;
-                    slotsObject->slot[currentSlot + loopCount].wantVdsLineFilter = slotsObject->slot[currentSlot + loopCount + 1].wantVdsLineFilter;
-                    slotsObject->slot[currentSlot + loopCount].wantStepResponse = slotsObject->slot[currentSlot + loopCount + 1].wantStepResponse;
-                    slotsObject->slot[currentSlot + loopCount].wantPeaking = slotsObject->slot[currentSlot + loopCount + 1].wantPeaking;
-                    // slotsObject->slot[currentSlot + loopCount].name = slotsObject->slot[currentSlot + loopCount + 1].name;
-                    strncpy(slotsObject->slot[currentSlot + loopCount].name, slotsObject->slot[currentSlot + loopCount + 1].name, 25);
-                    loopCount++;
+                        slotsObject->slot[currentSlot + loopCount].slot = slotsObject->slot[currentSlot + loopCount + 1].slot;
+                        slotsObject->slot[currentSlot + loopCount].presetID = slotsObject->slot[currentSlot + loopCount + 1].presetID;
+                        slotsObject->slot[currentSlot + loopCount].scanlines = slotsObject->slot[currentSlot + loopCount + 1].scanlines;
+                        slotsObject->slot[currentSlot + loopCount].scanlinesStrength = slotsObject->slot[currentSlot + loopCount + 1].scanlinesStrength;
+                        slotsObject->slot[currentSlot + loopCount].wantVdsLineFilter = slotsObject->slot[currentSlot + loopCount + 1].wantVdsLineFilter;
+                        slotsObject->slot[currentSlot + loopCount].wantStepResponse = slotsObject->slot[currentSlot + loopCount + 1].wantStepResponse;
+                        slotsObject->slot[currentSlot + loopCount].wantPeaking = slotsObject->slot[currentSlot + loopCount + 1].wantPeaking;
+                        // slotsObject->slot[currentSlot + loopCount].name = slotsObject->slot[currentSlot + loopCount + 1].name;
+                        strncpy(slotsObject->slot[currentSlot + loopCount].name, slotsObject->slot[currentSlot + loopCount + 1].name, 25);
+                        loopCount++;
+                    }
+
+                    File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
+                    slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
+                    slotsBinaryFileWrite.close();
                 }
 
-                File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
-                slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
-                slotsBinaryFileWrite.close();
                 SerialM.println("Preset \"" + slotName + "\" removed");
                 result = true;
             }

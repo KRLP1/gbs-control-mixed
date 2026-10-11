@@ -9,6 +9,7 @@
 #include "presets/pal_1280x1024.h"
 #include "presets/pal_1280x720.h"
 #include "presets/pal_1920x1080.h"
+#include "presets/ntsc_1080p_960w.h"
 #include "presets/pal_240p.h"
 #include "presets/pal_768x576.h"
 #include "presets/pal_downscale.h"
@@ -144,6 +145,92 @@
 
 // Menu and FrameSync are now defined in src/core/Globals.h
 // TODO replace result with VideoStandardInput enum
+
+// 960p-Windowbox: 240p/288p -> 960 Zeilen (4:3) im 1080p-Rahmen.
+// videoMode: 1/3 = NTSC, 2/4 = PAL (Parameter statt rto->videoStandardInput,
+// weil applyPresets() den Modus erst am Ende selbst setzt).
+// WICHTIG (PAL): PLLAD_MD nur mit VCORST-Reset-Sequenz aendern, sonst Gruenbild.
+void applyWindowbox960(uint8_t videoMode)
+{
+    bool isPal = (videoMode == 2 || videoMode == 4);
+    rto->videoStandardInput = videoMode;
+
+    if (isPal) {
+        // Basis: unangetastetes Stock-Preset
+        writeProgramArrayNew(pal_1920x1080, false);
+        doPostPresetLoadSteps();
+
+        // Vertikal: 960-Zeilen-Fenster, um 16 Zeilen nach unten
+        GBS::VDS_VB_ST::write(40);
+        GBS::VDS_VB_SP::write(42);
+        GBS::VDS_DIS_VB_ST::write(1058);
+        GBS::VDS_DIS_VB_SP::write(98);
+        GBS::VDS_VSCALE::write(479);
+        // Eingangsfenster vertikal fest verdrahtet (Stock 38/40 + 22):
+        // macht das Windowbox unabhaengig von der Full-Height-Option
+        GBS::IF_VB_ST::write(60);
+        GBS::IF_VB_SP::write(62);
+
+        // Eingangs-Gatter (bewaehrt, Spike-Fix)
+        GBS::IF_HB_SP1::write(76);
+        GBS::IF_HB_SP2::write(116);
+
+        // Horizontal: 4:3, auf 32"-Loewe kalibriert (46,4 x 34,8 cm)
+        GBS::VDS_HB_SP::write(227);
+        GBS::VDS_HB_ST::write(1258);
+        GBS::VDS_DIS_HB_SP::write(327);
+        GBS::VDS_DIS_HB_ST::write(1258);
+
+        // 4:3 via Sampling-Dichte, mit PLL-Reset-Sequenz
+        {
+            uint16_t targetMD = 2373;
+            GBS::PLLAD_MD::write(targetMD);
+            GBS::IF_HSYNC_RST::write(targetMD / 2);
+            GBS::IF_LINE_SP::write((targetMD / 2) + 1 + 0x40);
+            latchPLLAD();
+            GBS::PLLAD_VCORST::write(1);   // PLL-Reset
+            delay(20);
+            GBS::PLLAD_VCORST::write(0);   // Release -> Neu-Lock
+            delay(100);                    // Lock-Zeit geben
+            updateClampPosition();
+            updateCoastPosition(0);
+        }
+    } else {
+        // NTSC: unveraendert, getestet und funktionierend
+        writeProgramArrayNew(ntsc_1080p_960w, false);
+        doPostPresetLoadSteps();
+        GBS::IF_VB_ST::write(510);
+        GBS::IF_VB_SP::write(512);
+        GBS::VDS_Y_DELAY::write(2);
+        {
+            uint16_t targetMD = 2491;
+            GBS::PLLAD_MD::write(targetMD);
+            GBS::IF_HSYNC_RST::write(targetMD / 2);
+            GBS::IF_LINE_SP::write((targetMD / 2) + 1 + 0x40);
+            latchPLLAD();
+            delay(1);
+            updateClampPosition();
+            updateCoastPosition(0);
+        }
+        GBS::VDS_HB_SP::write(242);
+        GBS::VDS_HB_ST::write(1294);
+        GBS::VDS_DIS_HB_SP::write(360);
+        GBS::VDS_DIS_HB_ST::write(1294);
+    }
+
+    // eigene Preset-ID (0x07, unbenutzt), damit OLED-Anzeige, WebUI-Button-
+    // Highlighting und Slot-Namen spaeter den Modus korrekt anzeigen
+    GBS::GBS_PRESET_ID::write(0x07);
+    rto->presetID = 0x07;
+
+    SerialM.printf_P(PSTR("B: 960p-Windowbox (%s). std=%u MD=%u HS_RST=%u LINE_SP=%u vscale=%u\n"),
+        isPal ? "PAL" : "NTSC",
+        (unsigned)rto->videoStandardInput,
+        (unsigned)GBS::PLLAD_MD::read(),
+        (unsigned)GBS::IF_HSYNC_RST::read(),
+        (unsigned)GBS::IF_LINE_SP::read(),
+        (unsigned)GBS::VDS_VSCALE::read());
+}
 
 void setup()
 {
@@ -604,6 +691,21 @@ void loop()
 
     handleWiFi(0); // WiFi + OTA + WS + MDNS, checks for server enabled + started
 
+    static bool wasConnected = false;
+
+    if (WiFi.status() == WL_CONNECTED) {
+        wasConnected = true;
+    }
+
+    if (wasConnected && WiFi.getMode() == WIFI_STA && WiFi.status() != WL_CONNECTED) {
+        static unsigned long lastReconnect = 0;
+        if (millis() - lastReconnect > 10000) {
+            lastReconnect = millis();
+            SerialM.println(F("(WiFi): disconnected, reconnecting..."));
+            WiFi.reconnect();
+        }
+    }
+    
     // is there a command from Terminal or web ui?
     // Serial takes precedence
     if (Serial.available()) {
@@ -1483,6 +1585,38 @@ void loop()
                     rto->currentLevelSOG, rto->thisSourceMaxLevelSOG, rto->noSyncCounter,
                     GBS::STATUS_SYNC_PROC_HSACT::read(), getStatus16SpHsStable() ? 1 : 0,
                     GBS::DAC_RGBS_PWDNZ::read(), GBS::PAD_SYNC_OUT_ENZ::read());
+            } break;
+            case 'B':
+                applyWindowbox960(rto->videoStandardInput);
+                break;
+            case 'I': {
+                SerialM.printf_P(PSTR("VDS: hscale %u vscale %u | HB %u..%u disHB %u..%u | VB %u..%u disVB %u..%u | H_RST %u V_RST %u\n"),
+                    (unsigned)GBS::VDS_HSCALE::read(), (unsigned)GBS::VDS_VSCALE::read(),
+                    (unsigned)GBS::VDS_HB_ST::read(), (unsigned)GBS::VDS_HB_SP::read(),
+                    (unsigned)GBS::VDS_DIS_HB_ST::read(), (unsigned)GBS::VDS_DIS_HB_SP::read(),
+                    (unsigned)GBS::VDS_VB_ST::read(), (unsigned)GBS::VDS_VB_SP::read(),
+                    (unsigned)GBS::VDS_DIS_VB_ST::read(), (unsigned)GBS::VDS_DIS_VB_SP::read(),
+                    (unsigned)GBS::VDS_HSYNC_RST::read(), (unsigned)GBS::VDS_VSYNC_RST::read());
+                SerialM.printf_P(PSTR("IF: HB %u..%u HB2 %u..%u HBIN %u..%u VB %u..%u\n"),
+                    (unsigned)GBS::IF_HB_ST::read(), (unsigned)GBS::IF_HB_SP::read(),
+                    (unsigned)GBS::IF_HB_ST2::read(), (unsigned)GBS::IF_HB_SP2::read(),
+                    (unsigned)GBS::IF_HBIN_ST::read(), (unsigned)GBS::IF_HBIN_SP::read(),
+                    (unsigned)GBS::IF_VB_ST::read(), (unsigned)GBS::IF_VB_SP::read());
+                SerialM.printf_P(PSTR("CFG: hByps %u int1 %u int2 %u dreg %u tap6 %u yDly %u wenDly %u uDly %u vDly %u\n"),
+                    (unsigned)GBS::VDS_HSCALE_BYPS::read(),
+                    (unsigned)GBS::VDS_1ST_INT_BYPS::read(),
+                    (unsigned)GBS::VDS_2ND_INT_BYPS::read(),
+                    (unsigned)GBS::VDS_IN_DREG_BYPS::read(),
+                    (unsigned)GBS::VDS_TAP6_BYPS::read(),
+                    (unsigned)GBS::VDS_Y_DELAY::read(),
+                    (unsigned)GBS::VDS_WEN_DELAY::read(),
+                    (unsigned)GBS::VDS_U_DELAY::read(),
+                    (unsigned)GBS::VDS_V_DELAY::read());
+                SerialM.printf_P(PSTR("PLL: MD %u KS %u ICP %u FS %u\n"),
+                    (unsigned)GBS::PLLAD_MD::read(),
+                    (unsigned)GBS::PLLAD_KS::read(),
+                    (unsigned)GBS::PLLAD_ICP::read(),
+                    (unsigned)GBS::PLLAD_FS::read());
             } break;
             case ';':
                 externalClockGenResetClock();
