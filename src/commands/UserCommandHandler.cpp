@@ -202,7 +202,8 @@ void handleType2Command(char argument)
         case 'h':
         case 'p':
         case 's':
-        case 'L': {
+        case 'L':
+        case 'W': {
             // load preset via webui
             uint8_t videoMode = getVideoMode();
             if (videoMode == 0 && GBS::STATUS_SYNC_PROC_HSACT::read())
@@ -221,6 +222,8 @@ void handleType2Command(char argument)
                 uopt->presetPreference = Output1080P; // 1920x1080
             if (argument == 'L')
                 uopt->presetPreference = OutputDownscale; // downscale
+            if (argument == 'W')
+                uopt->presetPreference = Output960PWindowbox; // 1080p 4:3 windowbox
 
             rto->useHdmiSyncFix = 1; // disables sync out when programming preset
             if (rto->videoStandardInput == 14) {

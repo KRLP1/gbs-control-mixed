@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.1 – WebUI Windowbox Button Fix
+
+### Fixed
+- Web UI: the "1080p 4:3" button now persists the preset selection
+  (survives resync and restart) and shows as active; previously it only
+  switched once without saving. New user command 'W'; serial 'B' remains
+  a non-persistent test command.
+
 ## v1.1.0 – 960p Windowbox Release
 
 ### Added

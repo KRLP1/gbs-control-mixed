@@ -138,8 +138,8 @@
               </button>
               <button
                 class="gbs-button gbs-button__resolution"
-                gbs-message="B"
-                gbs-message-type="action"
+                gbs-message="W"
+                gbs-message-type="user"
                 gbs-click="normal"
                 gbs-element-ref="button1080p43"
                 gbs-role="preset"
