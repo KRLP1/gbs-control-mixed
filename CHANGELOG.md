@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.2 – WiFi Reconnect Cleanup
+
+### Fixed
+- Removed redundant third WiFi reconnect timer (10s) from main loop;
+  it could interfere with the ESP8266 SDK auto-reconnect and
+  PersWiFiManager's own reconnect logic. The two existing mechanisms
+  are sufficient.
+
 ## v1.1.1 – WebUI Windowbox Button Fix
 
 ### Fixed

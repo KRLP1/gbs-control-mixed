@@ -690,21 +690,6 @@ void loop()
 #endif
 
     handleWiFi(0); // WiFi + OTA + WS + MDNS, checks for server enabled + started
-
-    static bool wasConnected = false;
-
-    if (WiFi.status() == WL_CONNECTED) {
-        wasConnected = true;
-    }
-
-    if (wasConnected && WiFi.getMode() == WIFI_STA && WiFi.status() != WL_CONNECTED) {
-        static unsigned long lastReconnect = 0;
-        if (millis() - lastReconnect > 10000) {
-            lastReconnect = millis();
-            SerialM.println(F("(WiFi): disconnected, reconnecting..."));
-            WiFi.reconnect();
-        }
-    }
     
     // is there a command from Terminal or web ui?
     // Serial takes precedence
