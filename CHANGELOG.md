@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.4.0] – Peaking Levels, Transition Masking, PalForce60 Fix
+
+### Added
+- Peaking/Sharpness Level 0-3 (user command '8', WebUI button "Peaking-Stufe")
+  - 0=off, 1=normal, 2=strong, 3=max
+  - Persisted in preferencesv2.txt as field #21
+  - Re-applied per preset load via doPostPresetLoadSteps()
+  - WebUI button with "tune" icon on Filter page
+- FIRMWARE_VERSION logged at boot (Serial output: "firmware: vX.Y.Z")
+- Transition Masking: capture frozen during applyPresets() to prevent
+  visual garbage during preset switches (upstream #332)
+  - freezeVideo() at start of applyPresets()
+  - unfreezeVideo() in doPostPresetLoadSteps(), bypassModeSwitch_RGBHV(),
+    and HD-bypass early-return path
+
+### Fixed
+- PalForce60 no longer re-synced away by Si5351 external clock generator
+  (upstream #237). Added !rto->presetIsPalForce60 to extClockGenDetected
+  condition in gbs-control.ino loop()
+
 ## [v1.3.0] – P0 Stability Fixes from rpf16rj nx-improvements
 
 ### Added

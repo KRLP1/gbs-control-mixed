@@ -485,6 +485,8 @@ void applyPresets(uint8_t result)
         return false;
     };
 
+    freezeVideo();
+
     if (result == 1 || result == 3 || result == 8 || result == 9 || result == 14) {
         // NTSC input
         if (uopt->presetPreference == 0) {
@@ -554,8 +556,6 @@ void applyPresets(uint8_t result)
             writeProgramArrayNew(pal_downscale, false);
         } else if (uopt->presetPreference == Output1024x768) {
             writeProgramArrayNew(pal_1024x768, false);
-            // Kombinations-Fix: PLL low gain + Windowbox-Gatter zusammen
-            // (Einzeln getestet ohne Effekt; Kombination offen)
             GBS::PLLAD_FS::write(0);
             GBS::IF_HB_SP1::write(76);
             GBS::IF_HB_SP2::write(116);
@@ -583,6 +583,7 @@ void applyPresets(uint8_t result)
         // use bypass mode for these HD sources
         rto->videoStandardInput = result;
         setOutModeHdBypass(false);
+        unfreezeVideo();
         return;
     } else if (result == 15) {
         SerialM.print(F("RGB/HV "));
@@ -736,6 +737,8 @@ void bypassModeSwitch_RGBHV()
     } else {
         GBS::DEC_TEST_ENABLE::write(0); // no need for decimation test to be enabled
     }
+
+    unfreezeVideo(); // may have been frozen for transition masking in applyPresets()
 }
 
 void doPostPresetLoadSteps()
@@ -1542,6 +1545,21 @@ void doPostPresetLoadSteps()
     } else {
         // normal modes
         rto->applyPresetDoneStage = 1;
+    }
+
+    // Re-apply peaking level from user preferences (preset may have overridden registers)
+    if (uopt->wantPeaking && uopt->peakingLevel > 0) {
+        static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
+        static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
+        static const uint8_t stepGain[4] = {1, 1, 4, 8};
+        GBS::VDS_PK_Y_H_BYPS::write(0);
+        GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel]);
+        GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel]);
+        if (rto->presetID != 0x05 && rto->presetID != 0x15) {
+            GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel]);
+        }
+    } else {
+        GBS::VDS_PK_Y_H_BYPS::write(1);
     }
 
     unfreezeVideo();

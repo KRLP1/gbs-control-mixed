@@ -729,6 +729,15 @@
                   <div>Kantenanhebung</div>
                 </button>
                 <button
+                  gbs-message="8"
+                  gbs-message-type="user"
+                  gbs-click="normal"
+                  class="gbs-button gbs-button__control"
+                >
+                  <div class="gbs-icon">tune</div>
+                  <div>Peaking-Stufe</div>
+                </button>
+                <button
                   gbs-message="V"
                   gbs-message-type="action"
                   gbs-click="normal"

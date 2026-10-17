@@ -116,6 +116,26 @@ void handleType2Command(char argument)
             }
             saveUserPrefs();
             break;
+        case '8': {
+            // sharpness/peaking level: 0=off, 1=normal, 2=strong, 3=max
+            uopt->peakingLevel = (uopt->peakingLevel + 1) & 3;
+            SerialM.print(F("peaking level: "));
+            SerialM.println(uopt->peakingLevel);
+            saveUserPrefs();
+            if (uopt->wantPeaking && uopt->peakingLevel > 0) {
+                static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
+                static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
+                static const uint8_t stepGain[4] = {1, 1, 4, 8};
+                GBS::VDS_PK_Y_H_BYPS::write(0);
+                GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel]);
+                GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel]);
+                if (rto->presetID != 0x05 && rto->presetID != 0x15) {
+                    GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel]);
+                }
+            } else {
+                GBS::VDS_PK_Y_H_BYPS::write(1);
+            }
+        } break;
         case '9':
             //
             break;

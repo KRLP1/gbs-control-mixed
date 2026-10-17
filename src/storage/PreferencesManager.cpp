@@ -66,6 +66,7 @@ void saveUserPrefs()
     f.write(uopt->scanlineStrength + '0');              // #18
     f.write(uopt->disableExternalClockGenerator + '0'); // #19
     f.write(uopt->reverseRotaryEncoderForOledMenu + '0'); // #20
+    f.write(uopt->peakingLevel + '0'); // #21
 
     f.close();
     syncReverseRotaryEncoderIsrMirror();

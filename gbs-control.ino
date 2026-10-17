@@ -333,6 +333,8 @@ void setup()
 #endif
 
     SerialM.println(F("\nstartup"));
+    SerialM.print(F("firmware: "));
+    SerialM.println(FIRMWARE_VERSION);
 
     loadDefaultUserOptions();
     //globalDelay = 0;
@@ -513,6 +515,14 @@ void setup()
             } else {
                 uopt->reverseRotaryEncoderForOledMenu =
                     REVERSE_ROTARY_ENCODER_FOR_OLED_MENU > 0 ? 1 : 0;
+            }
+
+            if (f.available()) {
+                uopt->peakingLevel = (uint8_t)(f.read() - '0'); // #21
+                if (uopt->peakingLevel > 3)
+                    uopt->peakingLevel = 1; // default to normal
+            } else {
+                uopt->peakingLevel = 1; // default: normal peaking
             }
 
             f.close();
@@ -1816,7 +1826,9 @@ void loop()
                 GBS::SP_NO_CLAMP_REG::write(0); // 5_57 0
             }
 
-            if (rto->extClockGenDetected && !uopt->disableExternalClockGenerator && rto->videoStandardInput != 14) {
+            // PalForce60 needs in/out rate mismatch; external clock sync would undo it (upstream #237)
+            if (rto->extClockGenDetected && !uopt->disableExternalClockGenerator && rto->videoStandardInput != 14 &&
+                !rto->presetIsPalForce60) {
                 // Use external clock if detected and enabled in options
                 if (!rto->outModeHdBypass) {
                     if (GBS::PLL648_CONTROL_01::read() != 0x75) {

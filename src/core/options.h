@@ -40,6 +40,7 @@ struct userOptions
     uint8_t enableCalibrationADC;
     uint8_t scanlineStrength;
     uint8_t reverseRotaryEncoderForOledMenu; // 0/1; default from REVERSE_ROTARY_ENCODER_FOR_OLED_MENU
+    uint8_t peakingLevel; // 0=off, 1=normal, 2=strong, 3=max (user command '8')
 };
 
 
