@@ -1,5 +1,6 @@
 #include "GBSController.h"
 #include "../core/Globals.h"
+#include "../storage/PreferencesManager.h"
 #include "../web/SerialMirror.h"
 #include "../gbs/GBSPresets.h"
 #include "../gbs/GBSSync.h"
@@ -358,6 +359,18 @@ void applyPresets(uint8_t result)
         return;
     }
 
+    // === Auto-Gain nur für PAL 1024x768 zulassen, sonst aus – aber NUR wenn Hook es eingeschaltet hat ===
+    bool isPal1024x768 = ((result == 2 || result == 4) &&
+                          uopt->presetPreference == Output1024x768);
+    if (!isPal1024x768 && uopt->enableAutoGain && rto->autoGainHookEnabled) {
+        uopt->enableAutoGain = 0;
+        GBS::DEC_TEST_ENABLE::write(0);
+        saveUserPrefs();
+        rto->autoGainHookEnabled = false;
+        SerialM.println(F("Auto-Gain disabled (was hook-enabled, switching away from PAL 1024x768)"));
+    }
+    // === Ende Auto-Gain-Check ===
+
     // if RGBHV scaling and invoked through web ui or custom preset
     // need to know syncTypeCsync
     if (result == 14) {
@@ -547,6 +560,18 @@ void applyPresets(uint8_t result)
             GBS::IF_HB_SP1::write(76);
             GBS::IF_HB_SP2::write(116);
             latchPLLAD();
+
+            // === PAL 1024x768: Auto-Gain default an ===
+            // Fixt ADC-Übersteuerung bei B/W-Flanken (gelb-auf-schwarz-Spikes im sd2snes-Menü)
+            // Greift nur beim ersten Preset-Load, danach ist Flag persistiert.
+            if (!uopt->enableAutoGain) {
+                uopt->enableAutoGain = 1;
+                setAdcGain(AUTO_GAIN_INIT);
+                GBS::DEC_TEST_ENABLE::write(1);
+                saveUserPrefs();
+                rto->autoGainHookEnabled = true;
+                SerialM.println(F("1024x768 PAL: Auto-Gain enabled (ADC overdrive fix)"));
+            }
         } else if (uopt->presetPreference == Output960PWindowbox) {
             if (waitExtra) {
                 delay(400);

@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.2.1] – PAL 1024x768 Auto-Gain Default
+
+### Added
+- **PAL 1024x768 preset**: Auto-Gain is now enabled by default on first load.
+  - Fixes ADC overdrive spikes on sharp black/white transitions
+    (e.g. yellow-on-black text in sd2snes menu).
+  - Hook sets `uopt->enableAutoGain = 1` and persists to LittleFS.
+- New runtime flag `rto->autoGainHookEnabled` to distinguish hook-enabled
+  Auto-Gain from user-enabled.
+
+### Changed
+- When switching away from PAL 1024x768 to any other preset, Auto-Gain is
+  automatically disabled **only** if it was hook-enabled (marker = true).
+  User-enabled Auto-Gain stays on across preset switches.
+- Serial command `T` (auto gain toggle) now clears the hook marker,
+  so user override is respected and survives subsequent preset loads.
+
+### Fixed
+- ADC overdrive spikes on B/W transitions in PAL 1024x768 mode.
+
 ## v1.2.0 – 1024x768 Output Resolution
 
 ### Added

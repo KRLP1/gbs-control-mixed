@@ -877,6 +877,7 @@ void loop()
                     GBS::DEC_TEST_ENABLE::write(0);
                     SerialM.println("off");
                 }
+                rto->autoGainHookEnabled = false;
                 saveUserPrefs();
                 break;
             case 'e':
