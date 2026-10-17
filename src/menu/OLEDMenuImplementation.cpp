@@ -75,6 +75,10 @@ bool resolutionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMen
         case MT1080x960W:
             preset = PresetPreference::Output960PWindowbox;
             break;
+        case MT_1024x768:
+            preset = PresetPreference::Output1024x768;
+            break;
+            break;
         case MT_480s576:
             preset = PresetPreference::Output480P;
             break;
@@ -281,7 +285,9 @@ bool currentSettingHandler(OLEDMenuManager *manager, OLEDMenuItem *, OLEDMenuNav
         display.setFont(URW_Gothic_L_Book_20);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
 
-        if (rto->presetID == 0x01 || rto->presetID == 0x11) {
+        if (uopt->presetPreference == PresetPreference::Output1024x768) {
+            display.drawString(0, 0, "1024x768");
+        } else if (rto->presetID == 0x01 || rto->presetID == 0x11) {
             display.drawString(0, 0, "1280x960");
         } else if (rto->presetID == 0x02 || rto->presetID == 0x12) {
             display.drawString(0, 0, "1280x1024");
@@ -743,9 +749,9 @@ void initOLEDMenu()
 
     // Resolutions
     OLEDMenuItem *resMenu = oledMenu.registerItem(root, MT_NULL, "Auflösungen", nullptr, DejaVu_Sans_Mono_10);
-    const char *resolutions[6] = {"1280x960", "1280x1024", "1280x720", "1920x1080", "1080p 4:3", "480/576"};
-    uint8_t tags[6] = {MT_1280x960, MT1280x1024, MT1280x720, MT1920x1080, MT1080x960W, MT_480s576};
-    for (int i = 0; i < 6; ++i) {
+    const char *resolutions[7] = {"1280x960", "1280x1024", "1280x720", "1920x1080", "1080p 4:3", "1024x768", "480/576"};
+    uint8_t tags[7] = {MT_1280x960, MT1280x1024, MT1280x720, MT1920x1080, MT1080x960W, MT_1024x768, MT_480s576};
+    for (int i = 0; i < 7; ++i) {
         oledMenu.registerItem(resMenu, tags[i], resolutions[i], resolutionMenuHandler);
     }
     // downscale and passthrough

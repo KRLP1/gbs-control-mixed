@@ -66,6 +66,7 @@ const GBSControl = {
         7: "button1080p43",
         8: "buttonSourcePassThrough",
         9: "buttonLoadCustomPreset",
+        A: "button1024x768",
     },
     controlKeysMobileMode: "move",
     controlKeysMobile: {
@@ -493,6 +494,9 @@ const getSlotPresetName = (presetID) => {
             return "BYPASS";
         case 0x07:
             return "1080P 4:3";
+        case 0x08:
+        case 0x18:
+            return "1024x768";
         default:
             return "EIGEN";
     }

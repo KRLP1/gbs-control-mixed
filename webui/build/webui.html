@@ -857,6 +857,16 @@ section[name="alert"] {
               </button>
               <button
                 class="gbs-button gbs-button__resolution"
+                gbs-message="G"
+                gbs-message-type="user"
+                gbs-click="normal"
+                gbs-element-ref="button1024x768"
+                gbs-role="preset"
+              >
+                1024 <span>x768</span>
+              </button>
+              <button
+                class="gbs-button gbs-button__resolution"
                 gbs-message="h"
                 gbs-message-type="user"
                 gbs-click="normal"
@@ -2348,6 +2358,7 @@ const GBSControl = {
         7: "button1080p43",
         8: "buttonSourcePassThrough",
         9: "buttonLoadCustomPreset",
+        A: "button1024x768",
     },
     controlKeysMobileMode: "move",
     controlKeysMobile: {
@@ -2775,6 +2786,9 @@ const getSlotPresetName = (presetID) => {
             return "BYPASS";
         case 0x07:
             return "1080P 4:3";
+        case 0x08:
+        case 0x18:
+            return "1024x768";
         default:
             return "EIGEN";
     }

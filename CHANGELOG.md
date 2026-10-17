@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.2.0 – 1024x768 Output Resolution
+
+### Added
+- **1024x768 output resolution for NTSC and PAL**
+  - New preset IDs 0x08 (NTSC) / 0x18 (PAL)
+  - Available via OLED menu, web interface and serial command `G`
+  - PalForce60 exclusion added for this preset — like Windowbox, it's a native
+    dual-timing design and must not go through the NTSC-conversion path
+  - NTSC: direct port; vertical centering (IF_VB_ST/SP) recalibrated on real
+    hardware (SNES RGB, 60 Hz) — the inherited values left the picture
+    offset. Also excluded this preset from the generic SNES-NTSC auto
+    vertical-offset (`VPERIOD_IF == 523` → `IF_VB +4`) in `GBSController.cpp`,
+    since that correction would otherwise double up on this preset's own
+    calibrated values
+  - PAL: active window (HB/DIS_HB) recalibrated on real hardware (SNES RGB,
+    50 Hz)
+    
 ## v1.1.2 – WiFi Reconnect Cleanup
 
 ### Fixed

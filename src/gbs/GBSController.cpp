@@ -20,10 +20,12 @@
 #include "../../presets/pal_768x576.h"
 #include "../../presets/ntsc_1280x720.h"
 #include "../../presets/ntsc_1280x1024.h"
+#include "../../presets/ntsc_1024x768.h"
 #include "../../presets/ntsc_1920x1080.h"
 #include "../../presets/ntsc_downscale.h"
 #include "../../presets/pal_1280x720.h"
 #include "../../presets/pal_1280x1024.h"
+#include "../../presets/pal_1024x768.h"
 #include "../../presets/pal_1920x1080.h"
 #include "../../presets/pal_downscale.h"
 #include <Arduino.h>
@@ -437,7 +439,7 @@ void applyPresets(uint8_t result)
     if (uopt->PalForce60 == 1) {
         // Windowbox-Ausnahme: PAL-Variante ist ein sauberes 1080p50-Design
         // und soll nicht nach NTSC konvertiert werden
-        if (uopt->presetPreference != 2 && uopt->presetPreference != Output960PWindowbox) {
+        if (uopt->presetPreference != 2 && uopt->presetPreference != Output960PWindowbox && uopt->presetPreference != Output1024x768) {
             if (result == 2 || result == 4) {
                 Serial.println(F("PAL@50 to 60Hz"));
                 rto->presetIsPalForce60 = 1;
@@ -499,6 +501,8 @@ void applyPresets(uint8_t result)
             writeProgramArrayNew(ntsc_1920x1080, false);
         } else if (uopt->presetPreference == 6) {
             writeProgramArrayNew(ntsc_downscale, false);
+        } else if (uopt->presetPreference == Output1024x768) {
+            writeProgramArrayNew(ntsc_1024x768, false);
         } else if (uopt->presetPreference == Output960PWindowbox) {
             if (waitExtra) {
                 delay(400);
@@ -535,6 +539,14 @@ void applyPresets(uint8_t result)
             writeProgramArrayNew(pal_1920x1080, false);
         } else if (uopt->presetPreference == 6) {
             writeProgramArrayNew(pal_downscale, false);
+        } else if (uopt->presetPreference == Output1024x768) {
+            writeProgramArrayNew(pal_1024x768, false);
+            // Kombinations-Fix: PLL low gain + Windowbox-Gatter zusammen
+            // (Einzeln getestet ohne Effekt; Kombination offen)
+            GBS::PLLAD_FS::write(0);
+            GBS::IF_HB_SP1::write(76);
+            GBS::IF_HB_SP2::write(116);
+            latchPLLAD();
         } else if (uopt->presetPreference == Output960PWindowbox) {
             if (waitExtra) {
                 delay(400);
@@ -1312,7 +1324,10 @@ void doPostPresetLoadSteps()
     }
 
     // late adjustments that require some delay time first
-    if (!rto->isCustomPreset) {
+    // presetID 0x08 (1024x768 NTSC) excluded: its IF_VB_ST/SP are already
+    // calibrated as absolute values for this preset (incl. SNES sources);
+    // the generic +4 SNES offset below would push it off-center again.
+    if (!rto->isCustomPreset && rto->presetID != 0x08) {
         if (videoStandardInputIsPalNtscSd() && !rto->outModeHdBypass) {
             // SNES has less total lines and a slight offset (only relevant in 60Hz)
             if (GBS::VPERIOD_IF::read() == 523) {
@@ -1527,6 +1542,8 @@ void doPostPresetLoadSteps()
         SerialM.print(F("768x576"));
     else if (rto->presetID == 0x07)
         SerialM.print(F("1080p 4:3"));
+    else if (rto->presetID == 0x08 || rto->presetID == 0x18)
+        SerialM.print(F("1024x768"));
     else
         SerialM.print(F("bypass"));
 

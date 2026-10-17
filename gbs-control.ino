@@ -1,4 +1,5 @@
 // Presets
+#include "presets/ntsc_1024x768.h"
 #include "presets/ntsc_1280x1024.h"
 #include "presets/ntsc_1280x720.h"
 #include "presets/ntsc_1920x1080.h"
@@ -6,6 +7,7 @@
 #include "presets/ntsc_720x480.h"
 #include "presets/ntsc_downscale.h"
 #include "presets/ofw_RGBS.h"
+#include "presets/pal_1024x768.h"
 #include "presets/pal_1280x1024.h"
 #include "presets/pal_1280x720.h"
 #include "presets/pal_1920x1080.h"

@@ -41,6 +41,10 @@ void updateWebSocketData()
                 case 0x07: // 1080p 4:3 windowbox (NTSC + PAL share this ID)
                     toSend[1] = '7';
                     break;
+                case 0x08:
+                case 0x18:
+                    toSend[1] = 'A';
+                    break;
                 case PresetHdBypass: // bypass 1
                 case PresetBypassRGBHV: // bypass 2
                     toSend[1] = '8';
