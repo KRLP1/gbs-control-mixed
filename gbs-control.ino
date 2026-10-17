@@ -295,7 +295,7 @@ void setup()
 #ifdef ESP8266
         WiFi.setSleepMode(WIFI_NONE_SLEEP); // low latency responses, less chance for missing packets
         WiFi.setPhyMode(WIFI_PHY_MODE_11G); // Force 11g mode for better stability
-        WiFi.setOutputPower(18.0f);         // float: min 0.0f, max 20.5f
+        WiFi.setOutputPower(20.5f);         // float: min 0.0f, max 20.5f
 #else
         // ESP32
         // WiFi.setSleep(false);
@@ -438,6 +438,9 @@ void setup()
                 uopt->enableFrameTimeLock = 0;
 
             uopt->presetSlot = lowByte(f.read());
+            if (slotIndexMap.indexOf((char)uopt->presetSlot) < 0) {
+                uopt->presetSlot = 'A';
+            }
 
             uopt->frameTimeLockMethod = (uint8_t)(f.read() - '0');
             if (uopt->frameTimeLockMethod > 1)
@@ -697,14 +700,16 @@ void loop()
     // Serial takes precedence
     if (Serial.available()) {
         serialCommand = Serial.read();
-    } else if (serialCommandBuffer.length() > 0) {
-        serialCommand = serialCommandBuffer.charAt(0);
-        serialCommandBuffer.remove(0, 1);
-    } else if (inputStage > 0) {
-        // multistage with no more data
-        SerialM.println(F(" abort"));
-        discardSerialRxData();
-        serialCommand = ' ';
+    } else {
+        char queuedCmd;
+        if (serialCommandQueue.pop(queuedCmd)) {
+            serialCommand = queuedCmd;
+        } else if (inputStage > 0) {
+            // multistage with no more data
+            SerialM.println(F(" abort"));
+            discardSerialRxData();
+            serialCommand = ' ';
+        }
     }
     if (serialCommand != '@') {
         // multistage with bad characters?
@@ -1645,9 +1650,11 @@ void loop()
         }
     }
 
-    if (userCommand == '@' && userCommandBuffer.length() > 0) {
-        userCommand = userCommandBuffer.charAt(0);
-        userCommandBuffer.remove(0, 1);
+    if (userCommand == '@') {
+        char queuedCmd;
+        if (userCommandQueue.pop(queuedCmd)) {
+            userCommand = queuedCmd;
+        }
     }
 
     if (userCommand != '@') {

@@ -1,5 +1,35 @@
 # Changelog
 
+## [v1.3.0] – P0 Stability Fixes from rpf16rj nx-improvements
+
+### Added
+- New file `src/commands/CommandQueue.h`: SPSC ring buffer replacing shared
+  String buffers that were mutated by AsyncWebServer callbacks (caused frozen
+  UI, fork Kwakx#4)
+- Bounded `serialCommandQueue` and `userCommandQueue` (64-slot each) for
+  safe async->loop() command dispatch
+
+### Changed
+- WiFi output power raised from 18.0 dBm to 20.5 dBm (max) to better
+  overcome GBS-C EMI on problematic PAL presets
+- `webSocket.loop()` now runs on ESP8266 (was ESP32-only) — fixes WebSocket
+  disconnects on ESP8266
+- I2C `rawRead` in tw.h: zero-fills output buffer on failure and checks
+  `endTransmission()` return value, preventing stale data being written
+  to GBS8200 registers
+- OTA progress calculation: divide-by-zero guard when contentLength == 0
+- Cleanup: removed unused `serialCommandBuffer` and `userCommandBuffer`
+  String declarations from Globals.h/.cpp
+
+### Fixed
+- Frozen WebUI caused by String buffer mutation across AsyncWebServer
+  callbacks (PAL and NTSC affected; some PAL presets more than others)
+- WebSocket disconnects on ESP8266 (webSocket.loop() not called)
+- Corrupt WS status frame when presetSlot byte is 0xFF (EOF on short
+  preferencesv2.txt) — slot now defaults to 'A' if invalid
+- I2C error → stale register data being written to GBS8200
+- OTA progress divide-by-zero on empty content
+
 ## [v1.2.1] – PAL 1024x768 Auto-Gain Default
 
 ### Added

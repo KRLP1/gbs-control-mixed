@@ -16,6 +16,7 @@
 #include "../video/framesync.h"
 #include "../config/Config.h"
 #include "../web/SerialMirror.h"
+#include "../commands/CommandQueue.h"
 
 // Forward declarations (if needed for other types)
 
@@ -93,9 +94,9 @@ enum PresetID : uint8_t {
 
 // Serial commands
 extern char serialCommand;
-extern String serialCommandBuffer;
 extern char userCommand;
-extern String userCommandBuffer;
+extern CommandQueue serialCommandQueue;
+extern CommandQueue userCommandQueue;
 
 // Other global variables
 extern String slotIndexMap;

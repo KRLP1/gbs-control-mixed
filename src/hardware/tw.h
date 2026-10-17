@@ -65,12 +65,17 @@ namespace tw
 
         inline void rawRead(uint8_t addr, uint8_t reg, uint8_t *output, uint8_t size)
         {
+            memset(output, 0, size);
             Wire.beginTransmission(addr);
             Wire.write(reg);
-            Wire.endTransmission();
-            Wire.requestFrom(addr, size, static_cast<uint8_t>(true));
+            if (Wire.endTransmission() != 0) {
+                return;
+            }
+            uint8_t received = Wire.requestFrom(addr, size, static_cast<uint8_t>(true));
+            if (received < size) {
+            }
             uint8_t rcvBytes = 0;
-            while (Wire.available()) {
+            while (rcvBytes < received && Wire.available()) {
                 output[rcvBytes++] = Wire.read();
             }
 
@@ -95,7 +100,7 @@ namespace tw
             Wire.beginTransmission(addr);
             Wire.write(reg);
             Wire.write(input, size);
-            Wire.endTransmission();
+            (void)Wire.endTransmission();
         }
 
         // Number of bytes covered by a register with a particular offset and

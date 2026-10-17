@@ -444,7 +444,7 @@ FirmwareUpdater::UpdateStatus FirmwareUpdater::performUpdate(void (*progressCall
                 
                 written += readBytes;
                 
-                int progress = (written * 100) / contentLength;
+                int progress = (contentLength > 0) ? (written * 100) / contentLength : 0;
                 if (progress != lastProgress) {
                     lastProgress = progress;
                     

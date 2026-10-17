@@ -19,9 +19,8 @@ void handleWiFi(boolean instant)
         MDNS.update();
 #endif
 
-#ifdef ESP32
         webSocket.loop();
-#endif
+        
         persWM.handleWiFi(); // if connected, returns instantly. otherwise it reconnects or opens AP
 
         // Only process DNS requests if we are in AP mode (Captive Portal)

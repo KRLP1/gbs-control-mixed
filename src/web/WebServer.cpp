@@ -96,12 +96,9 @@ void startWebserver()
             if (params > 0) {
                 const AsyncWebParameter *p = request->getParam(0);
                 //Serial.println(p->name());
-                serialCommandBuffer += p->name().charAt(0);
-
-                // hack, problem with '+' command received via url param
-                if (serialCommandBuffer.charAt(serialCommandBuffer.length() - 1) == ' ') {
-                    serialCommandBuffer.setCharAt(serialCommandBuffer.length() - 1, '+');
-                }
+                char cmd = p->name().charAt(0);
+                if (cmd == ' ') cmd = '+';  // hack, problem with '+' command received via url param
+                serialCommandQueue.push(cmd);
             }
             request->send(200); // reply
         }
@@ -115,7 +112,7 @@ void startWebserver()
             if (params > 0) {
                 const AsyncWebParameter *p = request->getParam(0);
                 //Serial.println(p->name());
-                userCommandBuffer += p->name().charAt(0);
+                userCommandQueue.push(p->name().charAt(0));
             }
             request->send(200); // reply
         }

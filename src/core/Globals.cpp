@@ -52,9 +52,9 @@ struct adcOptions *adco = &adcopts;
 String slotIndexMap = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~()!*:,";
 
 char serialCommand;               // Serial / Web Server commands
-String serialCommandBuffer = "";  // Buffering for Web Server commands
 char userCommand;               // Serial / Web Server commands
-String userCommandBuffer = "";  // Buffering for Web Server commands
+CommandQueue serialCommandQueue;  // SPSC queue, replaces String buffer for AsyncWebServer callbacks
+CommandQueue userCommandQueue;    // SPSC queue, replaces String buffer for AsyncWebServer callbacks
 // lastSegment is defined in src/gbs/GBSRegister.cpp
 
 // Best observed Si5351 XTAL load capacitance setting from detection/init.
