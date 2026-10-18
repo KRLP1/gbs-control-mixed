@@ -1,5 +1,22 @@
 # Changelog
 
+## [v1.4.2] - Peaking Level Sync via Status-Ping
+
+### Added
+- WebSocket status-ping now includes peakingLevel (byte 6, bits 0-1)
+  as a new field alongside the existing option bytes
+- WebUI onmessage handler parses byte 6 and calls
+  GBSControl.setPeakingLevel() to update the Peaking-Stufe button
+  label directly from firmware-side state
+- GBSControl.setPeakingLevel() exposed as internal setter function
+  by the Peaking IIFE in initGBSButtons()
+
+### Changed
+- WebSocketHandler.cpp: MESSAGE_LEN increased from 6 to 7 to
+  accommodate the new peakingLevel byte
+- Peaking-Stufe button label now auto-syncs from status-ping
+  within ~3s of page load (no manual click needed to refresh)
+
 ## [v1.4.1] – Hotfix: Transition Masking Fix, Peaking Button, Code Review Fixes
 
 ### Fixed

@@ -7,7 +7,7 @@ void updateWebSocketData()
     if (rto->webServerEnabled && rto->webServerStarted) {
         if (webSocket.connectedClients() > 0) {
 
-            constexpr size_t MESSAGE_LEN = 6;
+            constexpr size_t MESSAGE_LEN = 7;
             char toSend[MESSAGE_LEN] = {0};
             toSend[0] = '#'; // makeshift ping in slot 0
 
@@ -114,6 +114,12 @@ void updateWebSocketData()
             if (uopt->frameTimeLockMethod == 1) {
                 toSend[5] |= (1 << 4);
             }
+
+            // Peaking level (0-3) in bits 0-1 of byte 6.
+            // '@' = 0x40 als "byte ist belegt"-Marker (analog zu bytes 3-5),
+            // um ungenutzte Bits auf einen Wert > 0x20 zu halten.
+            toSend[6] = '@';
+            toSend[6] |= (uopt->peakingLevel & 0x03);
 
             // send ping and stats
             if (ESP.getFreeHeap() > 6000) {

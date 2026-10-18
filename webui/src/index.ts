@@ -259,6 +259,7 @@ const createWebSocket = () => {
       messageDataAt3,
       messageDataAt4,
       messageDataAt5,
+      messageDataAt6,
     ] = message.data;
 
     if (messageDataAt0 != "#") {
@@ -385,6 +386,14 @@ const createWebSocket = () => {
         });
 
         updateFtlMethodRowsVisibility((optionByte1 & 0x02) === 0x02);
+      }
+
+      // Peaking level aus Byte 6 parsen (Bits 0-1).
+      // Wird nur gesendet, wenn Firmware >= v1.4.2 (altes Format hat nur 6 Bytes).
+      if (messageDataAt6) {
+        const peakingByte = messageDataAt6.charCodeAt(0);
+        const newLevel = peakingByte & 0x03;
+        (GBSControl as any).setPeakingLevel?.(newLevel);
       }
     }
   };
@@ -1224,13 +1233,18 @@ const initGBSButtons = () => {
     }
   });
 
-  // Peaking level button: update label on click to show current level
+  // Peaking level button: device is source of truth (not local counter)
   (() => {
     const peakingBtn = document.querySelector('[gbs-message="8"][gbs-message-type="user"]') as HTMLElement;
     if (!peakingBtn) return;
 
     const labels = ['Peaking: Aus', 'Peaking: Normal', 'Peaking: Stark', 'Peaking: Max'];
-    let level = 1; // default: normal
+    const STORAGE_KEY = 'gbsc_peaking_level';
+
+    // Initial-Guess aus localStorage, Fallback 1 (Normal)
+    let stored = parseInt(localStorage.getItem(STORAGE_KEY) ?? '1', 10);
+    if (isNaN(stored) || stored < 0 || stored > 3) stored = 1;
+    let level = stored;
 
     const updateLabel = () => {
       const divs = peakingBtn.querySelectorAll('div');
@@ -1238,13 +1252,24 @@ const initGBSButtons = () => {
         (divs[1] as HTMLElement).textContent = labels[level];
       }
     };
+    updateLabel();
 
-    updateLabel(); // set initial label
-
+    // Optimistisches Inkrement beim Klick; Device-Antwort korrigiert danach.
     peakingBtn.addEventListener('click', () => {
       level = (level + 1) % 4;
+      localStorage.setItem(STORAGE_KEY, String(level));
       updateLabel();
     });
+
+    // Expose Setter für onmessage-Handler.
+    // Wird mit peakingLevel aus dem Status-Ping (Byte 6, Bits 0-1) aufgerufen.
+    (GBSControl as any).setPeakingLevel = (newLevel: number) => {
+      if (newLevel >= 0 && newLevel <= 3 && newLevel !== level) {
+        level = newLevel;
+        localStorage.setItem(STORAGE_KEY, String(level));
+        updateLabel();
+      }
+    };
   })();
 };
 
