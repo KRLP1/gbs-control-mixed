@@ -501,6 +501,7 @@ void applyPresets(uint8_t result)
             const uint8_t *preset = loadPresetFromLittleFS(result);
             writeProgramArrayNew(preset, false);
             if (applySavedBypassPreset()) {
+                unfreezeVideo();
                 return;
             }
         } else if (uopt->presetPreference == 4) {
@@ -544,6 +545,7 @@ void applyPresets(uint8_t result)
             const uint8_t *preset = loadPresetFromLittleFS(result);
             writeProgramArrayNew(preset, false);
             if (applySavedBypassPreset()) {
+                unfreezeVideo();
                 return;
             }
         } else if (uopt->presetPreference == 4) {

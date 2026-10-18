@@ -751,6 +751,7 @@
               <ul class="gbs-help">
                 <!-- prettier-ignore -->
                 <li>Kantenanhebung erhöht den Kontrast an horizontalen Helligkeitssprüngen und wird empfohlen.</li>
+                <li>Peaking-Stufe wählt die Intensität der Kantenanhebung: Aus, Normal, Stark oder Max.</li>
                 <li>Sprungantwort erhöht die Schärfe an horizontalen Farbsprüngen und wird empfohlen.</li>
               </ul>
             </div>

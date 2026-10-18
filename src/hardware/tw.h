@@ -72,8 +72,7 @@ namespace tw
                 return;
             }
             uint8_t received = Wire.requestFrom(addr, size, static_cast<uint8_t>(true));
-            if (received < size) {
-            }
+            // short read (received < size): remaining bytes stay zeroed
             uint8_t rcvBytes = 0;
             while (rcvBytes < received && Wire.available()) {
                 output[rcvBytes++] = Wire.read();

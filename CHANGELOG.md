@@ -1,5 +1,21 @@
 # Changelog
 
+## [v1.4.1] – Hotfix: Transition Masking Fix, Peaking Button, Code Review Fixes
+
+### Fixed
+- Transition Masking: unfreezeVideo() added before early-return in
+  Custom-Bypass preset paths (NTSC + PAL) — video no longer stays
+  frozen when loading a custom bypass preset
+- Peaking button: querySelector now uses [gbs-message-type="user"]
+  to find the correct button (was finding a slot button instead)
+
+### Changed
+- Peaking level button now auto-enables/disables wantPeaking:
+  level > 0 → wantPeaking = 1, level 0 → wantPeaking = 0
+- WebUI: Peaking-Stufe button shows current level as text label
+- WebUI: Help text added for Peaking-Stufe button
+- tw.h: empty if-block replaced with explanatory comment
+
 ## [v1.4.0] – Peaking Levels, Transition Masking, PalForce60 Fix
 
 ### Added

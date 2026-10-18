@@ -119,6 +119,8 @@ void handleType2Command(char argument)
         case '8': {
             // sharpness/peaking level: 0=off, 1=normal, 2=strong, 3=max
             uopt->peakingLevel = (uopt->peakingLevel + 1) & 3;
+            // Sync wantPeaking with peakingLevel (keeps WebUI toggle consistent)
+            uopt->wantPeaking = (uopt->peakingLevel > 0) ? 1 : 0;
             SerialM.print(F("peaking level: "));
             SerialM.println(uopt->peakingLevel);
             saveUserPrefs();

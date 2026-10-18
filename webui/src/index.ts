@@ -1223,6 +1223,29 @@ const initGBSButtons = () => {
       );
     }
   });
+
+  // Peaking level button: update label on click to show current level
+  (() => {
+    const peakingBtn = document.querySelector('[gbs-message="8"][gbs-message-type="user"]') as HTMLElement;
+    if (!peakingBtn) return;
+
+    const labels = ['Peaking: Aus', 'Peaking: Normal', 'Peaking: Stark', 'Peaking: Max'];
+    let level = 1; // default: normal
+
+    const updateLabel = () => {
+      const divs = peakingBtn.querySelectorAll('div');
+      if (divs.length >= 2) {
+        (divs[1] as HTMLElement).textContent = labels[level];
+      }
+    };
+
+    updateLabel(); // set initial label
+
+    peakingBtn.addEventListener('click', () => {
+      level = (level + 1) % 4;
+      updateLabel();
+    });
+  })();
 };
 
 const initClearButton = () => {
