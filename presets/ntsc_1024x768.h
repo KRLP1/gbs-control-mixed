@@ -1,12 +1,6 @@
-// NTSC 1024x768 Preset - from dump-768p-best.json
-//
-// HT=2671, VT=806, HSCALE=512, VSCALE=641
-// Active H=1982, Active V=768, VCLK=129.6MHz
-// IF_VB_ST=0, IF_VB_SP=2 (live-kalibriert fuer vertikale Bildmitte, 2026-10-17)
-//
 const uint8_t ntsc_1024x768[] PROGMEM = {
     0x7C,  // s0_40
-    0x95,  // s0_41  VCLK=129.6MHz
+    0x95,  // s0_41
     0x0,   // s0_42
     0x19,  // s0_43
     0x25,  // s0_44
@@ -81,9 +75,9 @@ const uint8_t ntsc_1024x768[] PROGMEM = {
     0x4,   // s1_19
     0x74,  // s1_1A
     0x0,   // s1_1B
-    0x0,   // s1_1C  IF_VB_ST=0
+    0x0,   // s1_1C
     0x0,   // s1_1D
-    0x2,   // s1_1E  IF_VB_SP=2
+    0x2,   // s1_1E
     0x0,   // s1_1F
     0x40,  // s1_20
     0x0,   // s1_21
@@ -91,12 +85,12 @@ const uint8_t ntsc_1024x768[] PROGMEM = {
     0x4,   // s1_23
     0x0,   // s1_24
     0x0,   // s1_25
-    0x92,  // s1_26  IF_HBIN_SP=146
+    0x92,  // s1_26
     0x0,   // s1_27
     0x3E,  // s1_28
     0x0,   // s1_29
     0x0,   // s1_2A
-    0x08,  // s1_2B  presetID=0x08 (clean; CUSTOM bit was set in source dump)
+    0x08,  // s1_2B
     0x0,   // s1_2C
     0x0,   // s1_2D
     0x0,   // s1_2E
@@ -104,12 +98,12 @@ const uint8_t ntsc_1024x768[] PROGMEM = {
     0x2,   // s3_0
     0x6F,  // s3_1
     0x6A,  // s3_2
-    0x32,  // s3_3  VT=806
+    0x32,  // s3_3
     0xCA,  // s3_4
     0xA9,  // s3_5
     0x1D,  // s3_6
-    0xC,   // s3_7  VB_ST=12
-    0xE0,  // s3_8  VB_SP=14
+    0xC,   // s3_7
+    0xE0,  // s3_8
     0x0,   // s3_9
     0x8,   // s3_A
     0x0,   // s3_B
@@ -124,8 +118,8 @@ const uint8_t ntsc_1024x768[] PROGMEM = {
     0x63,  // s3_14
     0x2,   // s3_15
     0x0,   // s3_16
-    0x12,  // s3_17  HSCALE=512
-    0x28,  // s3_18  VSCALE=641
+    0x12,  // s3_17
+    0x28,  // s3_18
     0x4,   // s3_19
     0x0,   // s3_1A
     0x1,   // s3_1B

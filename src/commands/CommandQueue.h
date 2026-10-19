@@ -1,11 +1,6 @@
 #ifndef COMMAND_QUEUE_H
 #define COMMAND_QUEUE_H
 
-// Single-producer / single-consumer ring buffer.
-// Web server and WiFi callbacks run in the AsyncTCP context (a different task on
-// ESP32, and outside loop() on ESP8266), so they must not mutate the String
-// buffers that loop() consumes. push() is safe from the callback side, pop()
-// from the loop side; no allocation, no locking needed.
 struct CommandQueue {
     static const uint8_t CAPACITY = 64;
 
@@ -13,7 +8,7 @@ struct CommandQueue {
     {
         uint8_t next = (uint8_t)((head + 1) % CAPACITY);
         if (next == tail) {
-            return false; // full: drop instead of corrupting
+            return false;
         }
         buf[head] = c;
         head = next;
@@ -38,7 +33,7 @@ private:
     char buf[CAPACITY];
 };
 
-extern CommandQueue serialCommandQueue;  // 'sc' endpoint / serial-style commands
-extern CommandQueue userCommandQueue;    // 'uc' endpoint / user (type 2) commands
+extern CommandQueue serialCommandQueue;
+extern CommandQueue userCommandQueue;
 
-#endif // COMMAND_QUEUE_H
+#endif

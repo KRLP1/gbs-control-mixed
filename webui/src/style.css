@@ -250,6 +250,30 @@ body {
   text-align: right;
 }
 
+/* Peaking-Stufe: gestufter Fuellbalken statt reinem An/Aus, zeigt 0-3 */
+[gbs-peaking-level]::after {
+  background-color: var(--color-primary);
+  bottom: 0;
+  content: "";
+  height: 3px;
+  left: 0;
+  position: absolute;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+[gbs-peaking-level="1"]::after {
+  width: 33%;
+}
+
+[gbs-peaking-level="2"]::after {
+  width: 66%;
+}
+
+[gbs-peaking-level="3"]::after {
+  width: 100%;
+}
+
 /* menu */
 .gbs-menu {
   background-color: var(--color-cod-gray-light);

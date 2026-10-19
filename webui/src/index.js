@@ -1000,6 +1000,7 @@ const initGBSButtons = () => {
             if (divs.length >= 2) {
                 divs[1].textContent = labels[level];
             }
+            peakingBtn.setAttribute('gbs-peaking-level', String(level));
         };
         updateLabel();
         // Optimistisches Inkrement beim Klick; Device-Antwort korrigiert danach.

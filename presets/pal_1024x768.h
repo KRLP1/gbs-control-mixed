@@ -1,15 +1,6 @@
-// PAL 1024x768 Preset - 50Hz (final, live-kalibriert auf echter SNES-RGB-Quelle)
-//
-// VCLK=108MHz, HT=2680 (-> H_RST 2675 nach HTotal Adjust), VT=806 -> 50.00Hz
-// HSCALE=512, VSCALE=768
-// HB 2474..540 | DIS_HB 2526..648 -> Active_H=1878 (~41cm, zentriert, kein Noise)
-// VB 8..14 | DIS_VB 806..38 -> Active_V=768
-// Live getestet: zentriert, korrekte Breite, kein Störstreifen (Stand 2026-10-17)
-// PresetID=0x18
-//
 const uint8_t pal_1024x768[] PROGMEM = {
     0x2C,  // s0_40
-    0x85,  // s0_41  VCLK=108MHz (50Hz-Basis)
+    0x85,  // s0_41
     0x0,  // s0_42
     0x19,  // s0_43
     0x25,  // s0_44
@@ -80,13 +71,13 @@ const uint8_t pal_1024x768[] PROGMEM = {
     0x4,   // s1_15
     0x4C,  // s1_16
     0x0,   // s1_17
-    0x32,  // s1_18  IF_HB_ST2=1074
+    0x32,  // s1_18
     0x4,   // s1_19
-    0x70,  // s1_1A  IF_HB_SP2=112 (Canvas 976)
+    0x70,  // s1_1A
     0x0,   // s1_1B
-    0x08,  // s1_1C  IF_VB_ST=8
+    0x08,  // s1_1C
     0x0,   // s1_1D
-    0x0A,  // s1_1E  IF_VB_SP=10
+    0x0A,  // s1_1E
     0x0,   // s1_1F
     0x40,  // s1_20
     0x0,   // s1_21
@@ -94,25 +85,25 @@ const uint8_t pal_1024x768[] PROGMEM = {
     0x4,   // s1_23
     0x0,   // s1_24
     0x0,   // s1_25
-    0x88,  // s1_26  IF_HBIN_SP=136
+    0x88,  // s1_26
     0x0,   // s1_27
     0x3E,  // s1_28
     0x0,   // s1_29
     0x0,   // s1_2A
-    0x18,  // s1_2B  presetID=0x18
+    0x18,  // s1_2B
     0x0,   // s1_2C
     0x0,   // s1_2D
     0x0,   // s1_2E
     0x0,   // s1_2F
     0x2,   // s3_00
-    0x78,  // s3_01  HSYNC_RST=2680 (50Hz @ 108MHz)
+    0x78,  // s3_01
     0x6A,  // s3_02
-    0x32,  // s3_03  VSYNC_RST=806
-    0xAA,  // s3_04  HB_ST=2474
+    0x32,  // s3_03
+    0xAA,  // s3_04
     0xC9,  // s3_05
-    0x21,  // s3_06  HB_SP=540
-    0x08,  // s3_07  VB_ST low
-    0xE0,  // s3_08  VB_SP=14
+    0x21,  // s3_06
+    0x08,  // s3_07
+    0xE0,  // s3_08
     0x0,   // s3_09
     0x18,  // s3_0A
     0x80,  // s3_0B
@@ -120,15 +111,15 @@ const uint8_t pal_1024x768[] PROGMEM = {
     0x1,   // s3_0D
     0x60,  // s3_0E
     0x0,   // s3_0F
-    0xDE,  // s3_10  DIS_HB_ST=2526
+    0xDE,  // s3_10
     0x89,  // s3_11
-    0x28,  // s3_12  DIS_HB_SP=648
+    0x28,  // s3_12
     0x26,  // s3_13
-    0x63,  // s3_14  DIS_VB 806..38 (768 Zeilen, zentriert)
+    0x63,  // s3_14
     0x2,   // s3_15
-    0x0,   // s3_16  HSCALE=512
+    0x0,   // s3_16
     0x2,   // s3_17
-    0x30,  // s3_18  VSCALE=768
+    0x30,  // s3_18
     0x4,   // s3_19
     0x0,   // s3_1A
     0x1,   // s3_1B
@@ -346,7 +337,7 @@ const uint8_t pal_1024x768[] PROGMEM = {
     0x0,   // s5_0F
     0x0,   // s5_10
     0xB2,  // s5_11
-    0xDD,  // s5_12  PLLAD_MD=2269 (PAL-Stock, unangetastet!)
+    0xDD,  // s5_12
     0x8,   // s5_13
     0x0,   // s5_14
     0x0,   // s5_15
