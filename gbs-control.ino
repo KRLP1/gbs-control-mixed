@@ -295,7 +295,7 @@ void setup()
 #ifdef ESP8266
         WiFi.setSleepMode(WIFI_NONE_SLEEP); // low latency responses, less chance for missing packets
         WiFi.setPhyMode(WIFI_PHY_MODE_11G); // Force 11g mode for better stability
-        WiFi.setOutputPower(20.5f);         // float: min 0.0f, max 20.5f
+        WiFi.setOutputPower(18.0f);         // float: min 0.0f, max 20.5f
 #else
         // ESP32
         // WiFi.setSleep(false);
