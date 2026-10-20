@@ -118,8 +118,12 @@ void updateWebSocketData()
             // Peaking level (0-3) in bits 0-1 of byte 6.
             // '@' = 0x40 als "byte ist belegt"-Marker (analog zu bytes 3-5),
             // um ungenutzte Bits auf einen Wert > 0x20 zu halten.
+            // Nur melden, wenn Peaking per Kantenanhebung-Taste ('f') auch wirklich aktiv ist -
+            // sonst wuerde die Peaking-Stufe-Taste/der Fuellbalken einen Wert > 0 anzeigen,
+            // waehrend der Chip gerade bypassed ist (uopt->peakingLevel bleibt beim Ausschalten
+            // bewusst erhalten, damit 'f' die zuletzt gewaehlte Stufe wieder aufgreift).
             toSend[6] = '@';
-            toSend[6] |= (uopt->peakingLevel & 0x03);
+            toSend[6] |= (uopt->wantPeaking ? (uopt->peakingLevel & 0x03) : 0);
 
             // send ping and stats
             if (ESP.getFreeHeap() > 6000) {

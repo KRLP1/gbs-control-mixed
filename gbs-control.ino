@@ -502,7 +502,7 @@ void setup()
 
             uopt->scanlineStrength = (uint8_t)(f.read() - '0'); // #18
             if (uopt->scanlineStrength > 0x60)
-                uopt->enableCalibrationADC = 0x30;
+                uopt->scanlineStrength = 0x30;
 
             uopt->disableExternalClockGenerator = (uint8_t)(f.read() - '0'); // #19
             if (uopt->disableExternalClockGenerator > 1)

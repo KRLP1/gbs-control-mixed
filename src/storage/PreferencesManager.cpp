@@ -25,6 +25,7 @@ void loadDefaultUserOptions()
     uopt->deintMode = 0;
     uopt->wantVdsLineFilter = 0;
     uopt->wantPeaking = 1;
+    uopt->peakingLevel = 1; // #21 default: normal (matches old-prefs-file upgrade fallback; keeps wantPeaking/peakingLevel in sync)
     uopt->preferScalingRgbhv = 1;
     uopt->wantTap6 = 1;
     uopt->PalForce60 = 0;
