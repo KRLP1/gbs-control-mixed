@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.4.3] – Peaking Visual Bar, Sync Fixes, WiFi Revert
+
+### Added
+- WebUI: visual fill bar on Peaking-Stufe button showing current
+  level (0=empty, 1=33%, 2=66%, 3=100%), implemented via
+  gbs-peaking-level HTML attribute and CSS ::after pseudo-element
+
+### Changed
+- WiFi output power reverted from 20.5 dBm back to 18.0 dBm.
+  v1.3.0 raised the power to overcome GBS-C EMI, but the increase
+  didn't measurably improve stability. Returns to kwakx's original
+  value of 18.0 dBm.
+
+### Fixed
+- Peaking-Stufe button label was showing the saved level (e.g.
+  "Normal") even when peaking was bypassed via the 'f' command
+  (Kantenanhebung). Status-ping now sends 0 when wantPeaking is
+  false, so the WebUI correctly shows "Aus" with empty fill bar
+  when the chip is bypassed.
+- peakingLevel was not explicitly set in loadDefaultUserOptions(),
+  leaving it potentially uninitialized. Now set to 1 (Normal) to
+  match wantPeaking = 1 and the old-prefs-file upgrade fallback.
+- scanlineStrength bounds-check bug: the validation for
+  scanlineStrength > 0x60 accidentally wrote the reset value to
+  enableCalibrationADC instead of scanlineStrength (copy-paste
+  error). With a corrupt preferences file, scanlineStrength
+  stayed at the bad value while enableCalibrationADC was
+  unintentionally set to 0x30.
+
 ## [v1.4.2] - Peaking Level Sync via Status-Ping
 
 ### Added
