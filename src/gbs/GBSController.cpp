@@ -1253,10 +1253,12 @@ void doPostPresetLoadSteps()
         GBS::VDS_D_RAM_BYPS::write(1);
     }
 
-    if (uopt->wantPeaking) {
-        GBS::VDS_PK_Y_H_BYPS::write(0);
-    } else {
-        GBS::VDS_PK_Y_H_BYPS::write(1);
+    if (!rto->isCustomPreset) {
+        if (uopt->wantPeaking) {
+            GBS::VDS_PK_Y_H_BYPS::write(0);
+        } else {
+            GBS::VDS_PK_Y_H_BYPS::write(1);
+        }
     }
 
     // unused now
@@ -1549,19 +1551,39 @@ void doPostPresetLoadSteps()
         rto->applyPresetDoneStage = 1;
     }
 
-    // Re-apply peaking level from user preferences (preset may have overridden registers)
-    if (uopt->wantPeaking && uopt->peakingLevel > 0) {
-        static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
-        static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
-        static const uint8_t stepGain[4] = {1, 1, 4, 8};
-        GBS::VDS_PK_Y_H_BYPS::write(0);
-        GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel]);
-        GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel]);
-        if (rto->presetID != 0x05 && rto->presetID != 0x15) {
-            GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel]);
+    // Re-apply peaking level from user preferences (preset may have overridden registers).
+    // Skip for custom presets: their saved register values should be preserved as-is.
+    if (!rto->isCustomPreset) {
+        if (uopt->wantPeaking && uopt->peakingLevel > 0) {
+            static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
+            static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
+            static const uint8_t stepGain[4] = {1, 1, 4, 8};
+            GBS::VDS_PK_Y_H_BYPS::write(0);
+            GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel]);
+            GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel]);
+            if (rto->presetID != 0x05 && rto->presetID != 0x15) {
+                GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel]);
+            }
+        } else {
+            GBS::VDS_PK_Y_H_BYPS::write(1);
         }
-    } else {
-        GBS::VDS_PK_Y_H_BYPS::write(1);
+    }
+
+    // For custom presets, sync uopt->wantPeaking with the actual register state.
+    // The preset file may have peaking enabled/disabled differently from the
+    // current uopt value (e.g. user turned peaking off before loading the preset).
+    // Without this sync, the status-ping would report the old uopt value and
+    // the WebUI would show peaking as off even though the registers have it on.
+    if (rto->isCustomPreset) {
+        uopt->wantPeaking = (GBS::VDS_PK_Y_H_BYPS::read() == 0) ? 1 : 0;
+        if (uopt->wantPeaking) {
+            // Reverse-map peaking level from the LB gain register
+            uint8_t lbGain = GBS::VDS_PK_LB_GAIN::read();
+            if (lbGain >= 0x3f) uopt->peakingLevel = 3;       // Max
+            else if (lbGain >= 0x28) uopt->peakingLevel = 2;  // Stark
+            else if (lbGain >= 0x16) uopt->peakingLevel = 1;  // Normal
+            else uopt->peakingLevel = 0;                       // Aus
+        }
     }
 
     unfreezeVideo();
