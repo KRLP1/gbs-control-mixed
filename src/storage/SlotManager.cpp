@@ -94,11 +94,16 @@ const uint8_t *loadPresetFromLittleFS(byte forVideoMode)
     }
 
     if (i != sizeof(preset)) {
-        SerialM.print(F("warning: preset file holds "));
+        SerialM.print(F("error: preset file holds "));
         SerialM.print(i);
         SerialM.print(F(" of "));
         SerialM.print(sizeof(preset));
-        SerialM.println(F(" values, may be damaged"));
+        SerialM.println(F(" values; falling back to 240p"));
+
+        if (forVideoMode == 2 || forVideoMode == 4)
+            return pal_240p;
+        else
+            return ntsc_240p;
     }
 
     return preset;

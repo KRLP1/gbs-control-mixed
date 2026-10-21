@@ -98,7 +98,9 @@ void startWebserver()
                 //Serial.println(p->name());
                 char cmd = p->name().charAt(0);
                 if (cmd == ' ') cmd = '+';  // hack, problem with '+' command received via url param
-                serialCommandQueue.push(cmd);
+                if (!serialCommandQueue.push(cmd)) {
+                    SerialM.println(F("Warning: serial command queue full, dropping"));
+                }
             }
             request->send(200); // reply
         }
@@ -112,7 +114,9 @@ void startWebserver()
             if (params > 0) {
                 const AsyncWebParameter *p = request->getParam(0);
                 //Serial.println(p->name());
-                userCommandQueue.push(p->name().charAt(0));
+                if (!userCommandQueue.push(p->name().charAt(0))) {
+                    SerialM.println(F("Warning: user command queue full, dropping"));
+                }
             }
             request->send(200); // reply
         }
@@ -237,7 +241,7 @@ void startWebserver()
         if (ESP.getFreeHeap() > 10000) {
             int params = request->params();
 
-            if (params > 0) {
+            if (params >= 2) {
                 SlotsScratch scratch;
                 if (!scratch.ok()) {
                     request->send(200, "application/json", "false");
@@ -275,14 +279,20 @@ void startWebserver()
 
                 // index param
                 const AsyncWebParameter *slotIndexParam = request->getParam(0);
-                String slotIndexString = slotIndexParam->value();
-                uint8_t slotIndex = lowByte(slotIndexString.toInt());
-                if (slotIndex >= SLOTS_TOTAL) {
+                if (slotIndexParam == nullptr) {
                     goto fail;
                 }
+                const long slotIndexValue = slotIndexParam->value().toInt();
+                if (slotIndexValue < 0 || slotIndexValue >= SLOTS_TOTAL) {
+                    goto fail;
+                }
+                const uint8_t slotIndex = static_cast<uint8_t>(slotIndexValue);
 
                 // name param
                 const AsyncWebParameter *slotNameParam = request->getParam(1);
+                if (slotNameParam == nullptr) {
+                    goto fail;
+                }
                 String slotName = slotNameParam->value();
 
                 char emptySlotName[25] = "                        ";
