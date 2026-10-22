@@ -78,7 +78,6 @@ bool resolutionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMen
         case MT_1024x768:
             preset = PresetPreference::Output1024x768;
             break;
-            break;
         case MT_480s576:
             preset = PresetPreference::Output480P;
             break;
@@ -285,7 +284,7 @@ bool currentSettingHandler(OLEDMenuManager *manager, OLEDMenuItem *, OLEDMenuNav
         display.setFont(URW_Gothic_L_Book_20);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
 
-        if (uopt->presetPreference == PresetPreference::Output1024x768) {
+        if (rto->presetID == 0x08 || rto->presetID == 0x18) {
             display.drawString(0, 0, "1024x768");
         } else if (rto->presetID == 0x01 || rto->presetID == 0x11) {
             display.drawString(0, 0, "1280x960");

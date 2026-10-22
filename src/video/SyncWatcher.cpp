@@ -920,7 +920,6 @@ void runSyncWatcher()
         sourceGoneProbeCount = 0; // source is back, forget any pending "source gone" probes
         fallbackPresetTried = false; // re-arm for the next time a source turns up unclassifiable
         newVideoModeCounter = 0;
-        sourceGoneProbeCount = 0; // source is back, forget any pending "source gone" probes
 
         if (rto->continousStableCounter == 1 && !doFullRestore) {
             rto->videoIsFrozen = true; // ensures unfreeze

@@ -1081,13 +1081,24 @@ void loop()
             case 'u':
                 ResetSDRAM();
                 break;
-            case 'f':
-                SerialM.print(F("peaking "));
-                if (uopt->wantPeaking == 0) {
-                    uopt->wantPeaking = 1;
-                    GBS::VDS_PK_Y_H_BYPS::write(0);
-                    SerialM.println("on");
-                } else {
+        case 'f':
+            SerialM.print(F("peaking "));
+            if (uopt->wantPeaking == 0) {
+                uopt->wantPeaking = 1;
+                if (uopt->peakingLevel == 0) {
+                    uopt->peakingLevel = 1;
+                }
+                static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
+                static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
+                static const uint8_t stepGain[4] = {1, 1, 4, 8};
+                GBS::VDS_PK_Y_H_BYPS::write(0);
+                GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel & 3]);
+                GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel & 3]);
+                if (rto->presetID != 0x05 && rto->presetID != 0x15) {
+                    GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel & 3]);
+                }
+                SerialM.println("on");
+            } else {
                     uopt->wantPeaking = 0;
                     GBS::VDS_PK_Y_H_BYPS::write(1);
                     SerialM.println("off");

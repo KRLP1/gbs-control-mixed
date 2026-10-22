@@ -1582,7 +1582,10 @@ void doPostPresetLoadSteps()
             if (lbGain >= 0x3f) uopt->peakingLevel = 3;       // Max
             else if (lbGain >= 0x28) uopt->peakingLevel = 2;  // Stark
             else if (lbGain >= 0x16) uopt->peakingLevel = 1;  // Normal
-            else uopt->peakingLevel = 0;                       // Aus
+            else {
+                uopt->peakingLevel = 0;
+                uopt->wantPeaking = 0;
+            }
         }
     }
 
