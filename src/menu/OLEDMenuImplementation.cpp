@@ -158,11 +158,11 @@ bool presetSelectionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
 static bool isValidSlotName(const char *name, size_t maxLen) {
     if (!name || !*name) return false;
     if (strcmp(EMPTY_SLOT_NAME, name) == 0) return false;
-    char first = name[0];
-    bool isAlphaNum = (first >= 'a' && first <= 'z') ||
-                      (first >= 'A' && first <= 'Z') ||
-                      (first >= '0' && first <= '9');
-    if (!isAlphaNum) return false;
+    // Erstes Zeichen: jedes sichtbare ASCII-Zeichen (0x21-0x7E). Die WebUI erlaubt auch
+    // Namen wie "(Test)" oder "-Mario"; nur Leerzeichen/Steuerzeichen am Anfang gelten
+    // als ungueltig (leerer oder beschaedigter Slot).
+    unsigned char first = (unsigned char)name[0];
+    if (first <= 0x20 || first > 0x7E) return false;
     for (size_t i = 0; i < maxLen; ++i) {
         char c = name[i];
         if (c == '\0') return true;

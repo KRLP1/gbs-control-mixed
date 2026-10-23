@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.4.5] – OLED Preset Name Filter Widening
+
+### Fixed
+- Presets with names starting with non-alphanumeric characters (e.g.
+  "(Test)", "-Mario", "_backup") were hidden from the OLED preset menu
+  in v1.4.4 even though they existed in the WebUI. The isValidSlotName
+  check now accepts any visible ASCII character (0x21-0x7E) as the first
+  character, matching the WebUI's allowed character set documented in
+  slot.h. Space and control characters at the start of a name are still
+  rejected as before.
+
 ## [v1.4.4] – OLED Menu Crash Fix, Custom Preset Peaking, Validation Hardening
 
 ### Fixed
