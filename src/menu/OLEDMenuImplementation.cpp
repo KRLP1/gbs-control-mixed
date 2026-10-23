@@ -154,35 +154,68 @@ bool presetSelectionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
 
     return false;
 }
+
+static bool isValidSlotName(const char *name, size_t maxLen) {
+    if (!name || !*name) return false;
+    if (strcmp(EMPTY_SLOT_NAME, name) == 0) return false;
+    char first = name[0];
+    bool isAlphaNum = (first >= 'a' && first <= 'z') ||
+                      (first >= 'A' && first <= 'Z') ||
+                      (first >= '0' && first <= '9');
+    if (!isAlphaNum) return false;
+    for (size_t i = 0; i < maxLen; ++i) {
+        char c = name[i];
+        if (c == '\0') return true;
+        if (c < 0x20 || c > 0x7E) return false;
+    }
+    return false;
+}
+
 bool presetsCreationMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav, bool)
 {
-    SlotMetaArray slotsObject;
+    // Static statt Heap/Stack: im BSS, ueberlebt den Funktionsaufruf,
+    // keine dangling Zeiger wenn registerItem nur den Pointer speichert
+    static SlotMetaArray slotsObject;
+
     File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
     manager->clearSubItems(item);
     int curNumSlot = 0;
+    bool tooManySlots = false;
     if (slotsBinaryFileRead) {
         slotsBinaryFileRead.read((byte *)&slotsObject, sizeof(slotsObject));
         slotsBinaryFileRead.close();
+
+        // Erst zaehlen. Passen nicht alle Slots in das Untermenue, bleibt ein Eintrag
+        // fuer den Hinweis frei - sonst loest der Hinweis als 17. Untereintrag
+        // den Panic "Maximum number of sub items reached" aus.
+        int usedSlots = 0;
         for (int i = 0; i < SLOTS_TOTAL; ++i) {
             const SlotMeta &slot = slotsObject.slot[i];
-            if (strcmp(EMPTY_SLOT_NAME, slot.name) == 0 || !strlen(slot.name)) {
+            if (isValidSlotName(slot.name, sizeof(slot.name))) {
+                usedSlots++;
+            }
+        }
+        tooManySlots = usedSlots > OLED_MENU_MAX_SUBITEMS_NUM;
+        const int maxShown = tooManySlots ? OLED_MENU_MAX_SUBITEMS_NUM - 1 : OLED_MENU_MAX_SUBITEMS_NUM;
+
+        for (int i = 0; i < SLOTS_TOTAL && curNumSlot < maxShown; ++i) {
+            const SlotMeta &slot = slotsObject.slot[i];
+            if (!isValidSlotName(slot.name, sizeof(slot.name))) {
                 continue;
             }
             curNumSlot++;
-            if (curNumSlot > OLED_MENU_MAX_SUBITEMS_NUM) {
-                break;
-            }
             manager->registerItem(item, slot.slot, slot.name, presetSelectionMenuHandler);
         }
     }
 
-    if (curNumSlot > OLED_MENU_MAX_SUBITEMS_NUM) {
+    if (tooManySlots) {
         manager->registerItem(item, 0, "Bitte WebUI nutzen, um auf weitere Presets zuzugreifen.");
     }
 
     if (!item->numSubItem) {
         manager->registerItem(item, 0, "Keine Presets. Bitte zuerst über die Web-UI eins anlegen.");
     }
+
     return true;
 }
 bool resetMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav, bool isFirstTime)

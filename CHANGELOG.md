@@ -1,5 +1,27 @@
 # Changelog
 
+## [v1.4.4] – OLED Menu Crash Fix, Custom Preset Peaking, Validation Hardening
+
+### Fixed
+- OLED preset menu crash when more than 16 presets were saved. The device
+  rebooted when opening the preset menu. Root causes: SlotMetaArray (2.3 KB)
+  was allocated on the ESP8266 stack, and the menu registered more items
+  than OLED_MENU_MAX_SUBITEMS_NUM allows. Now uses a static BSS buffer,
+  counts valid slots before registration, and filters corrupted name fields.
+- Peaking settings overwritten when loading a custom preset. The firmware
+  now syncs wantPeaking and peakingLevel from the saved register values
+  instead of overriding them with defaults.
+- Serial peaking toggle (command 'f') did not write the gain registers
+  when enabling peaking, so the change was not visible. Now writes
+  VDS_PK_LB_GAIN, VDS_PK_LH_GAIN, and VDS_STEP_GAIN. Defaults peakingLevel
+  to 1 if it was 0.
+- Duplicate sourceGoneProbeCount assignment in SyncWatcher removed.
+- WebServer input validation hardened: parameter count checks, nullptr
+  guards, integer range validation before uint8_t cast, push() return
+  value checks.
+- SlotManager now falls back to the 240p preset when a preset file is
+  truncated instead of returning a stale static buffer.
+
 ## [v1.4.3] – Peaking Visual Bar, Sync Fixes, WiFi Revert
 
 ### Added
