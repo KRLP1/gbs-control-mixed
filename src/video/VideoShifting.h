@@ -8,8 +8,6 @@
 void shiftHorizontal(uint16_t amountToShift, bool subtracting);
 void shiftHorizontalLeft();
 void shiftHorizontalRight();
-void shiftHorizontalLeftIF(uint8_t amount);
-void shiftHorizontalRightIF(uint8_t amount);
 void shiftVertical(uint16_t amountToAdd, bool subtracting);
 void shiftVerticalUp();
 void shiftVerticalDown();

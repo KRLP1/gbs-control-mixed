@@ -1,5 +1,54 @@
 # Changelog
 
+## [v1.4.8] – Wrap-Guard Hardening + Dead-Code Removal
+
+### Fixed
+- Unsigned guard trap in VideoScaling.cpp: `(GBS::VDS_HB_ST::read() - 5)
+  > 0` did not protect against unsigned underflow. If read() < 5, the
+  subtraction wraps to ~65530 and the comparison is true, writing 4094
+  (after 12-bit truncation) to the register. Changed to compare the
+  operand before subtraction: `read() > 5`.
+- Same unsigned guard trap in gbs-control.ino command '6':
+  `(IF_HSYNC_RST::read() - 4) > ...` had the same issue. Added
+  `IF_HSYNC_RST::read() > 4` short-circuit before the subtraction.
+- Per-target register width validation for serial command 'Y': the
+  previous flat `value < 4096` check did not cover 11-bit targets (vt,
+  vs*, vb*, if*, vsstc, vsspc) or the 5-bit sog register. Now uses
+  per-target valueMax (2047 for 11-bit, 31 for sog, 4095 for 12-bit).
+  The 'vt' target additionally uses valueMax = 2045 because
+  set_vtotal() derives VDS_VSYN_SIZE1/2 = VDS_VSYNC_RST + 2 (both
+  11-bit), so 2045 + 2 = 2047 is the exact safe maximum.
+
+### Changed
+- Scanlines.cpp: `MADPT_Y_MI_OFFSET::write(0xff)` changed to `0x7f`.
+  The register is 7-bit, so the mask made 0xff into 0x7f anyway — the
+  new literal matches the register width and is clearer.
+- Serial commands Z/T (brightness), N/M (contrast), Q/H (Pb/U gain),
+  P/S (Pr/V gain): added `< 255` / `> 0` bounds checks with "limit"
+  feedback instead of silently wrapping at the 8-bit boundary.
+- Serial command 'n' (pll_divider increment): added `>= 4095` check
+  with "limit" feedback to prevent 12-bit overflow.
+- Serial commands 'x'/'X' (IF_HBIN_SP ±1): added `< 4095` / `> 0`
+  bounds checks with "limit" feedback.
+- SyncWatcher.cpp: `VDS_VSCALE::write(read() - 57)` now guarded with
+  `>= 57` check to prevent 10-bit underflow on pathological low values.
+- osd.h menuMoveCursor(): changed from `(uint8_t)(menuIndex + delta) %
+  OSD_ICON_COUNT` to int16_t arithmetic with negative-wrap handling.
+  The old code would jump to icon 3 instead of the last icon when
+  delta was negative at index 0 (255 % 8 = 3). Parked code, not
+  user-reachable, but correct now if reactivated.
+
+### Removed
+- VideoShifting.cpp: shiftHorizontalLeftIF() and shiftHorizontalRightIF()
+  removed (~130 lines). These were the only real 12→11-bit truncation
+  sites in the codebase (PLLAD_MD written undiminished to IF_HSYNC_RST
+  for progressive sources), but the functions were never called — the
+  only call sites were commented out in gbs-control.ino. Marked as
+  "unused but may become useful" since upstream ramapcsx2 approximately 2017.
+- VideoShifting.h: corresponding declarations removed.
+- gbs-control.ino: commented-out call sites for the removed functions
+  cleaned up.
+
 ## [v1.4.7] – OSD Cleanup: Dead Code Removal, Default Initializers
 
 ### Changed
@@ -32,7 +81,7 @@ No functional changes.
   true) which erases NVS credentials. Changed to WiFi.disconnect(false)
   to preserve stored credentials.
 - ESP8266 WebSocket heartbeat was ineffective in ASYNC mode. The
-  library's enableHeartbeat() is wegkompiliert in ASYNC builds, so two
+  library's enableHeartbeat() is compiled away in ASYNC builds, so two
   dead clients could block the WebUI indefinitely. Replaced with an
   app-level heartbeat that pings every 2s and disconnects zombies after
   6s without pong.

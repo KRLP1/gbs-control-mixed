@@ -1248,8 +1248,10 @@ void runSyncWatcher()
                             SerialM.println("source >= 70Hz");
                             // increase vscale; vscale -= 57 seems to hit magic factor often
                             // 512 + 57 = 569 + 57 = 626 + 57 = 683
-                            GBS::VDS_VSCALE::write(GBS::VDS_VSCALE::read() - 57);
-
+                            // wrap guard: 10 bit register, skip on pathological low values
+                            if (GBS::VDS_VSCALE::read() >= 57) {
+                                GBS::VDS_VSCALE::write(GBS::VDS_VSCALE::read() - 57);
+                            }
                         } else {
                             // 50/60Hz, presumably
                             // adjust vposition

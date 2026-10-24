@@ -48,7 +48,7 @@ void disableScanlines()
 
         GBS::DIAG_BOB_PLDY_RAM_BYPS::write(1); // 2_00 7
         GBS::VDS_W_LEV_BYPS::write(1);         // brightness
-        GBS::MADPT_Y_MI_OFFSET::write(0xff); // 2_0b offset 0xff disables mixing
+        GBS::MADPT_Y_MI_OFFSET::write(0x7f); // 2_0b all bits set disables mixing (7 bit register)
         GBS::MADPT_VIIR_BYPS::write(1);      // 2_26 6 disable VIIR
         GBS::MADPT_PD_RAM_BYPS::write(1);
         GBS::RFF_LINE_FLIP::write(0); // back to default

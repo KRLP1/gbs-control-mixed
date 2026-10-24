@@ -59,7 +59,12 @@ private:
 
     static void menuMoveCursor(int8_t delta)
     {
-        menuIndex = (uint8_t)(menuIndex + delta) % GBS::OSD_ICON_COUNT;
+        // modulo-safe wrap: (uint8_t)(0 - 1) = 255, 255 % 8 would jump to icon 3
+        int16_t newIndex = ((int16_t)menuIndex + delta) % GBS::OSD_ICON_COUNT;
+        if (newIndex < 0) {
+            newIndex += GBS::OSD_ICON_COUNT;
+        }
+        menuIndex = (uint8_t)newIndex;
         GBS::OSD_COMMAND_FINISH::write(false);
         GBS::OSD_MENU_ICON_SEL::write(GBS::osdIcon(menuIndex));
         GBS::OSD_COMMAND_FINISH::write(true);

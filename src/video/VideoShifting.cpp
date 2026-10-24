@@ -54,68 +54,6 @@ void shiftHorizontalRight()
     shiftHorizontal(4, false);
 }
 
-// unused but may become useful
-void shiftHorizontalLeftIF(uint8_t amount)
-{
-    typedef TV5725<GBS_ADDR> GBS;
-    uint16_t IF_HB_ST2 = GBS::IF_HB_ST2::read() + amount;
-    uint16_t IF_HB_SP2 = GBS::IF_HB_SP2::read() + amount;
-    uint16_t PLLAD_MD = GBS::PLLAD_MD::read();
-
-    if (rto->videoStandardInput <= 2) {
-        GBS::IF_HSYNC_RST::write(PLLAD_MD / 2); // input line length from pll div
-    } else if (rto->videoStandardInput <= 7) {
-        GBS::IF_HSYNC_RST::write(PLLAD_MD);
-    }
-    uint16_t IF_HSYNC_RST = GBS::IF_HSYNC_RST::read();
-
-    GBS::IF_LINE_SP::write(IF_HSYNC_RST + 1);
-
-    // start
-    if (IF_HB_ST2 < IF_HSYNC_RST) {
-        GBS::IF_HB_ST2::write(IF_HB_ST2);
-    } else {
-        GBS::IF_HB_ST2::write(IF_HB_ST2 - IF_HSYNC_RST);
-    }
-
-    // stop
-    if (IF_HB_SP2 < IF_HSYNC_RST) {
-        GBS::IF_HB_SP2::write(IF_HB_SP2);
-    } else {
-        GBS::IF_HB_SP2::write((IF_HB_SP2 - IF_HSYNC_RST) + 1);
-    }
-}
-
-// unused but may become useful
-void shiftHorizontalRightIF(uint8_t amount)
-{
-    typedef TV5725<GBS_ADDR> GBS;
-    int16_t IF_HB_ST2 = GBS::IF_HB_ST2::read() - amount;
-    int16_t IF_HB_SP2 = GBS::IF_HB_SP2::read() - amount;
-    uint16_t PLLAD_MD = GBS::PLLAD_MD::read();
-
-    if (rto->videoStandardInput <= 2) {
-        GBS::IF_HSYNC_RST::write(PLLAD_MD / 2); // input line length from pll div
-    } else if (rto->videoStandardInput <= 7) {
-        GBS::IF_HSYNC_RST::write(PLLAD_MD);
-    }
-    int16_t IF_HSYNC_RST = GBS::IF_HSYNC_RST::read();
-
-    GBS::IF_LINE_SP::write(IF_HSYNC_RST + 1);
-
-    if (IF_HB_ST2 > 0) {
-        GBS::IF_HB_ST2::write(IF_HB_ST2);
-    } else {
-        GBS::IF_HB_ST2::write(IF_HSYNC_RST - 1);
-    }
-
-    if (IF_HB_SP2 > 0) {
-        GBS::IF_HB_SP2::write(IF_HB_SP2);
-    } else {
-        GBS::IF_HB_SP2::write(IF_HSYNC_RST - 1);
-    }
-}
-
 // modified to move VBSP, set VBST to VBSP-2
 void shiftVertical(uint16_t amountToAdd, bool subtracting)
 {

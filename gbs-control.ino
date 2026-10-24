@@ -764,12 +764,10 @@ void loop()
             case '+':
                 SerialM.println("hor. +");
                 shiftHorizontalRight();
-                //shiftHorizontalRightIF(4);
                 break;
             case '-':
                 SerialM.println("hor. -");
                 shiftHorizontalLeft();
-                //shiftHorizontalLeftIF(4);
                 break;
             case '*':
                 shiftVerticalUpIF();
@@ -991,6 +989,11 @@ void loop()
                 break;
             case 'n': {
                 uint16_t pll_divider = GBS::PLLAD_MD::read();
+                // wrap guard: PLLAD_MD is 12 bit, derived 1_0e/1_22 stay in range as well
+                if (pll_divider >= 4095) {
+                    SerialM.println("limit");
+                    break;
+                }
                 pll_divider += 1;
                 GBS::PLLAD_MD::write(pll_divider);
                 GBS::IF_HSYNC_RST::write((pll_divider / 2));
@@ -1200,7 +1203,9 @@ void loop()
                 if (videoStandardInputIsPalNtscSd() && !rto->outModeHdBypass) {
                     if (GBS::IF_HBIN_SP::read() >= 10) {                     // IF_HBIN_SP: min 2
                         GBS::IF_HBIN_SP::write(GBS::IF_HBIN_SP::read() - 8); // canvas move right
-                        if ((GBS::IF_HSYNC_RST::read() - 4) > ((GBS::PLLAD_MD::read() >> 1) + 5)) {
+                        // wrap guard: compare the operand, not the unsigned subtraction result
+                        if (GBS::IF_HSYNC_RST::read() > 4 &&
+                            (GBS::IF_HSYNC_RST::read() - 4) > ((GBS::PLLAD_MD::read() >> 1) + 5)) {
                             GBS::IF_HSYNC_RST::write(GBS::IF_HSYNC_RST::read() - 4); // shrink 1_0e
                             GBS::IF_LINE_SP::write(GBS::IF_LINE_SP::read() - 4);     // and 1_22 to go with it
                         }
@@ -1479,7 +1484,22 @@ void loop()
                 }
 
                 value = Serial.parseInt();
-                if (value < 4096) {
+                // wrap guard: per-target register width instead of the flat 12 bit check
+                // vs*/vb* and if* targets are 11 bit, sog is 5 bit, the rest 12 bit
+                // vt: VDS_VSYNC_RST is 11 bit, but set_vtotal() also derives
+                // VDS_VSYN_SIZE1/2 = VDS_VSYNC_RST + 2 (11 bit), so 2045 is the exact max
+                uint16_t valueMax = 4095;
+                if (what.equals("vt")) {
+                    valueMax = 2045;
+                } else if (what.equals("vsst") || what.equals("vssp") ||
+                    what.equals("vbst") || what.equals("vbsp") || what.equals("vbstd") ||
+                    what.equals("vbspd") || what.equals("ifini") || what.equals("ifvst") ||
+                    what.equals("ifvsp") || what.equals("vsstc") || what.equals("vsspc")) {
+                    valueMax = 2047;
+                } else if (what.equals("sog")) {
+                    valueMax = 31;
+                }
+                if (value <= valueMax) {
                     SerialM.print("set ");
                     SerialM.print(what);
                     SerialM.print(" ");
@@ -1540,15 +1560,25 @@ void loop()
             } break;
             case 'x': {
                 uint16_t if_hblank_scale_stop = GBS::IF_HBIN_SP::read();
-                GBS::IF_HBIN_SP::write(if_hblank_scale_stop + 1);
-                SerialM.print("1_26: ");
-                SerialM.println((if_hblank_scale_stop + 1), HEX);
+                // wrap guard: IF_HBIN_SP is 12 bit
+                if (if_hblank_scale_stop < 4095) {
+                    GBS::IF_HBIN_SP::write(if_hblank_scale_stop + 1);
+                    SerialM.print("1_26: ");
+                    SerialM.println((if_hblank_scale_stop + 1), HEX);
+                } else {
+                    SerialM.println("limit");
+                }
             } break;
             case 'X': {
                 uint16_t if_hblank_scale_stop = GBS::IF_HBIN_SP::read();
-                GBS::IF_HBIN_SP::write(if_hblank_scale_stop - 1);
-                SerialM.print("1_26: ");
-                SerialM.println((if_hblank_scale_stop - 1), HEX);
+                // wrap guard: IF_HBIN_SP is 12 bit
+                if (if_hblank_scale_stop > 0) {
+                    GBS::IF_HBIN_SP::write(if_hblank_scale_stop - 1);
+                    SerialM.print("1_26: ");
+                    SerialM.println((if_hblank_scale_stop - 1), HEX);
+                } else {
+                    SerialM.println("limit");
+                }
             } break;
             case '(': {
                 writeProgramArrayNew(ntsc_1920x1080, false);

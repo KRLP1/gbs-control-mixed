@@ -563,53 +563,85 @@ void handleType2Command(char argument)
             SerialM.println(uopt->scanlineStrength, HEX);
             break;
         case 'Z':
-            // brightness++
-            GBS::VDS_Y_OFST::write(GBS::VDS_Y_OFST::read() + 1);
-            SerialM.print(F("Brightness++ : "));
-            SerialM.println(GBS::VDS_Y_OFST::read(), DEC);
+            // brightness++ (wrap guard: 8 bit register)
+            if (GBS::VDS_Y_OFST::read() < 255) {
+                GBS::VDS_Y_OFST::write(GBS::VDS_Y_OFST::read() + 1);
+                SerialM.print(F("Brightness++ : "));
+                SerialM.println(GBS::VDS_Y_OFST::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
             break;
         case 'T':
-            // brightness--
-            GBS::VDS_Y_OFST::write(GBS::VDS_Y_OFST::read() - 1);
-            SerialM.print(F("Brightness-- : "));
-            SerialM.println(GBS::VDS_Y_OFST::read(), DEC);
+            // brightness-- (wrap guard: 8 bit register)
+            if (GBS::VDS_Y_OFST::read() > 0) {
+                GBS::VDS_Y_OFST::write(GBS::VDS_Y_OFST::read() - 1);
+                SerialM.print(F("Brightness-- : "));
+                SerialM.println(GBS::VDS_Y_OFST::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
         break;
         case 'N':
-            // contrast++
-            GBS::VDS_Y_GAIN::write(GBS::VDS_Y_GAIN::read() + 1);
-            SerialM.print(F("Contrast++ : "));
-            SerialM.println(GBS::VDS_Y_GAIN::read(), DEC);
+            // contrast++ (wrap guard: 8 bit register)
+            if (GBS::VDS_Y_GAIN::read() < 255) {
+                GBS::VDS_Y_GAIN::write(GBS::VDS_Y_GAIN::read() + 1);
+                SerialM.print(F("Contrast++ : "));
+                SerialM.println(GBS::VDS_Y_GAIN::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
         break;
         case 'M':
-            // contrast--
-            GBS::VDS_Y_GAIN::write(GBS::VDS_Y_GAIN::read() - 1);
-            SerialM.print(F("Contrast-- : "));
-            SerialM.println(GBS::VDS_Y_GAIN::read(), DEC);
+            // contrast-- (wrap guard: 8 bit register)
+            if (GBS::VDS_Y_GAIN::read() > 0) {
+                GBS::VDS_Y_GAIN::write(GBS::VDS_Y_GAIN::read() - 1);
+                SerialM.print(F("Contrast-- : "));
+                SerialM.println(GBS::VDS_Y_GAIN::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
         break;
         case 'Q':
-             // pb/u gain++
-            GBS::VDS_UCOS_GAIN::write(GBS::VDS_UCOS_GAIN::read() + 1);
-            SerialM.print(F("Pb/U gain++ : "));
-            SerialM.println(GBS::VDS_UCOS_GAIN::read(), DEC);
+             // pb/u gain++ (wrap guard: 8 bit register)
+            if (GBS::VDS_UCOS_GAIN::read() < 255) {
+                GBS::VDS_UCOS_GAIN::write(GBS::VDS_UCOS_GAIN::read() + 1);
+                SerialM.print(F("Pb/U gain++ : "));
+                SerialM.println(GBS::VDS_UCOS_GAIN::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
             break;
         case 'H':
-             // pb/u gain--
-            GBS::VDS_UCOS_GAIN::write(GBS::VDS_UCOS_GAIN::read() - 1);
-            SerialM.print(F("Pb/U gain-- : "));
-            SerialM.println(GBS::VDS_UCOS_GAIN::read(), DEC);
+             // pb/u gain-- (wrap guard: 8 bit register)
+            if (GBS::VDS_UCOS_GAIN::read() > 0) {
+                GBS::VDS_UCOS_GAIN::write(GBS::VDS_UCOS_GAIN::read() - 1);
+                SerialM.print(F("Pb/U gain-- : "));
+                SerialM.println(GBS::VDS_UCOS_GAIN::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
             break;
         break;
         case 'P':
-            // pr/v gain++
-            GBS::VDS_VCOS_GAIN::write(GBS::VDS_VCOS_GAIN::read() + 1);
-            SerialM.print(F("Pr/V gain++ : "));
-            SerialM.println(GBS::VDS_VCOS_GAIN::read(), DEC);
+            // pr/v gain++ (wrap guard: 8 bit register)
+            if (GBS::VDS_VCOS_GAIN::read() < 255) {
+                GBS::VDS_VCOS_GAIN::write(GBS::VDS_VCOS_GAIN::read() + 1);
+                SerialM.print(F("Pr/V gain++ : "));
+                SerialM.println(GBS::VDS_VCOS_GAIN::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
             break;
         case 'S':
-            // pr/v gain--
-            GBS::VDS_VCOS_GAIN::write(GBS::VDS_VCOS_GAIN::read() - 1);
-            SerialM.print(F("Pr/V gain-- : "));
-            SerialM.println(GBS::VDS_VCOS_GAIN::read(), DEC);
+            // pr/v gain-- (wrap guard: 8 bit register)
+            if (GBS::VDS_VCOS_GAIN::read() > 0) {
+                GBS::VDS_VCOS_GAIN::write(GBS::VDS_VCOS_GAIN::read() - 1);
+                SerialM.print(F("Pr/V gain-- : "));
+                SerialM.println(GBS::VDS_VCOS_GAIN::read(), DEC);
+            } else {
+                SerialM.println("limit");
+            }
             break;
         case 'O':
             // info

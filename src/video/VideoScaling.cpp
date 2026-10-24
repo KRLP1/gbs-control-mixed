@@ -71,7 +71,8 @@ void scaleHorizontal(uint16_t amountToScale, bool subtracting)
     // !subtracting check just for readability
     if (!subtracting) {
         shiftHorizontal(toShift, false);
-        if ((GBS::VDS_HB_ST::read() - 5) > 0) {
+        // wrap guard: compare the operand, not the unsigned subtraction result
+        if (GBS::VDS_HB_ST::read() > 5) {
             GBS::VDS_HB_ST::write(GBS::VDS_HB_ST::read() - 5);
         }
     }
