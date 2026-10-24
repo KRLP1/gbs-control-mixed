@@ -88,6 +88,7 @@
  * [See the README.md file for other details]
  ****************************************************************************/
 void Si5351mcu::setFreq(uint8_t clk, uint32_t freq) {
+    if (freq == 0) return; // Div/0-Guard: 900000000/freq weiter unten
     uint8_t a, R = 1, pll_stride = 0, msyn_stride = 0;
     uint32_t b, c, f, fvco, outdivider;
     uint32_t MSx_P1, MSNx_P1, MSNx_P2, MSNx_P3;

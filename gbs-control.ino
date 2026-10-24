@@ -319,8 +319,6 @@ void setup()
                 hostnameFile.close();
             }
         }
-        startWebserver();
-        rto->webServerStarted = true;
     } else {
         //WiFi.disconnect(); // deletes credentials
         WiFi.mode(WIFI_OFF);
@@ -666,6 +664,15 @@ void setup()
     // some debug tools leave garbage in the serial rx buffer
     if (Serial.available()) {
         discardSerialRxData();
+    }
+
+    // Webserver bewusst zuletzt starten: Handler laufen erst auf vollstaendig
+    // initialisiertem State (uopt aus preferencesv2.txt, rto-Defaults, GBS-I2C).
+    // webServerStarted-Gate (WiFiManager.cpp) laesst die handleWiFi()-Aufrufe
+    // in setup() davor leer laufen. WebUI/AP dadurch erst nach ~3-5s mehr da.
+    if (rto->webServerEnabled) {
+        startWebserver();
+        rto->webServerStarted = true;
     }
 }
 
@@ -1453,12 +1460,17 @@ void loop()
                     if (rto->extClockGenDetected) {
                         Serial.print(F("old freqExtClockGen: "));
                         Serial.println((uint32_t)rto->freqExtClockGen);
-                        rto->freqExtClockGen = Serial.parseInt();
-                        // safety range: 1 - 250 MHz
-                        if (rto->freqExtClockGen >= 1000000 && rto->freqExtClockGen <= 250000000) {
+                        // Erst validieren, dann zuweisen: 0 (parseInt-Timeout)
+                        // wuerde spaeter in externalClockGenSyncInOutRate() zu
+                        // Si.setFreq(0,0) -> 900000000/0 -> CPU-Exception
+                        uint32_t newFreq = (uint32_t)Serial.parseInt();
+                        if (newFreq >= 1000000 && newFreq <= 250000000) {
+                            rto->freqExtClockGen = newFreq;
                             Si.setFreq(0, rto->freqExtClockGen);
                             rto->clampPositionIsSet = 0;
                             rto->coastPositionIsSet = 0;
+                        } else {
+                            SerialM.println(F("out of range (1-250 MHz), keeping old"));
                         }
                         Serial.print(F("set freqExtClockGen: "));
                         Serial.println((uint32_t)rto->freqExtClockGen);
@@ -1678,6 +1690,8 @@ void loop()
         }
     }
 
+    SerialM.processDeferred(); // Web-Handler-Ausgaben hier versenden
+
     if (userCommand != '@') {
         handleType2Command(userCommand);
         userCommand = '@'; // in case we handled web server command
@@ -1718,7 +1732,17 @@ void loop()
                 success = FrameSync::runVsync(uopt->frameTimeLockMethod);
             }
             if (!success) {
-                if (rto->syncLockFailIgnore-- == 0) {
+                // uint8_t-Dekrement: 0-- wrappt auf 255 -> naechster Reset erst
+                // nach ~255 Fehlversuchen (~7 min). Guard wie VideoTiming.cpp.
+                // Kein Re-Arm noetig: FrameSync::reset() setzt syncLockReady=false,
+                // und dieser Block laeuft nur bei ready() -> genau 1 Reset, danach
+                // Recovery ueber runAutoBestHTotal()/FrameSync::init(); dessen Erfolg
+                // setzt den Counter wieder auf 16 (VideoTiming.cpp applyBestHTotal).
+                // Max. 1 Reset pro lockInterval (~1.7 s), selbst im Worst Case.
+                if (rto->syncLockFailIgnore > 0) {
+                    rto->syncLockFailIgnore--;
+                }
+                if (rto->syncLockFailIgnore == 0) {
                     FrameSync::reset(uopt->frameTimeLockMethod); // in case run() failed because we lost sync signal
                 }
             } else if (rto->syncLockFailIgnore > 0) {

@@ -1,5 +1,62 @@
 # Changelog
 
+## [v1.4.6] – Hardening: Async Safety, Crash Fixes, WiFi Retention
+
+### Fixed
+- OTA update could crash with division by zero when Content-Length was
+  less than 100 bytes. Added a guard check before the modulo operation.
+- OLED preset menu loaded the wrong preset slot for indices >= 26 (slots
+  beyond 'Z' in the slot map). The old code used 'A' + item->tag which
+  only works for the first 26 slots; now uses slotIndexMap[item->tag]
+  with a bounds-check fallback to manager->unfreeze().
+- ESP32 lost WiFi credentials when the router was offline for ~45
+  seconds. PersWiFiManager::startApMode() called WiFi.disconnect(true,
+  true) which erases NVS credentials. Changed to WiFi.disconnect(false)
+  to preserve stored credentials.
+- ESP8266 WebSocket heartbeat was ineffective in ASYNC mode. The
+  library's enableHeartbeat() is wegkompiliert in ASYNC builds, so two
+  dead clients could block the WebUI indefinitely. Replaced with an
+  app-level heartbeat that pings every 2s and disconnects zombies after
+  6s without pong.
+- /gbs/restore-filters performed I2C and LittleFS operations directly in
+  the async web handler, racing with the main loop. Now queues a 'V'
+  command and processes it in handleType2Command() in the loop() context.
+- SerialMirror WebSocket broadcasts from async handlers could corrupt
+  frames by racing with the loop()-context broadcast. Added an SPSC ring
+  buffer (deferLog/processDeferred) with std::atomic_thread_fence memory
+  barriers.
+- /slot/save used positional URL parameters which are unreliable on ESP32
+  (parameter ordering, cache-buster shifting). Changed to named
+  parameters (index=, name=). Added empty-name validation and moved all
+  parameter validation before any LittleFS access.
+- WebUI did not URL-encode preset names in /slot/save requests. Names
+  with special characters (&, =, spaces) could break URL parsing. Added
+  encodeURIComponent() in the savePreset fetch call.
+- Si5351 serial command "w f" without a number stored freqExtClockGen=0,
+  causing a division by zero in externalClockGenSyncInOutRate() and a
+  CPU exception. Added input validation (1-250 MHz range) and a
+  library-level freq==0 guard in Si5351mcu::setFreq.
+- syncLockFailIgnore (uint8_t) underflow: the postfix decrement
+  syncLockFailIgnore-- wrapped 0 to 255, delaying the next
+  FrameSync::reset by ~255 failures (~7 minutes). Added a guard
+  consistent with the VideoTiming.cpp pattern.
+- CommandQueue had no memory barrier, making it unsafe for ESP32
+  dual-core access. Added std::atomic_thread_fence release/acquire
+  fences with head/tail snapshots to prevent TOCTOU.
+- OTA resolveRedirect could spin without yielding on stalled connections,
+  risking a watchdog reset. Added delay(1) to feed the WDT and pump the
+  WiFi/TCP stack.
+- Web server started early in setup() before all state was initialized,
+  so handlers could access uninitialized uopt/rto. Moved startWebserver()
+  to the end of setup(), gated by rto->webServerEnabled.
+- userCommand direct assignment from async handlers (/wifi/connect,
+  /hostname/set) raced with loop()'s read. Changed to
+  userCommandQueue.push() with deferLog warning on queue full.
+
+### Removed
+- /filesystem/format GET endpoint removed (destructive operation without
+  authentication, CSRF-vulnerable).
+
 ## [v1.4.5] – OLED Preset Name Filter Widening
 
 ### Fixed

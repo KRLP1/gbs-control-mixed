@@ -471,9 +471,8 @@ const savePreset = () => {
       if (currentName && currentName.trim() !== "Leer") {
         currentSlot.setAttribute("gbs-name", currentName);
         fetch(
-          `/slot/save?index=${currentIndex}&name=${currentName.substring(
-            0,
-            24
+          `/slot/save?index=${currentIndex}&name=${encodeURIComponent(
+            currentName.substring(0, 24)
           )}&${+new Date()}`
         ).then(() => {
           loadUser("4").then(() => {

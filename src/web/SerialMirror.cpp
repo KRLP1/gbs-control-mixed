@@ -66,6 +66,45 @@ void SerialMirror::flush() {
     flushToWebSocket(); 
 }
 
+// Nur aus Async-Webserver-Handlern aufrufen: Text in den Ring stellen statt
+// direkt in wsBuffer/broadcastTXT zu greifen (Race gegen den loop()-Kontext)
+void SerialMirror::deferLog(const char *str)
+{
+    while (*str) {
+        uint16_t next = (uint16_t)((deferHead + 1) % DEFER_SIZE);
+        if (next == deferTail) {
+            return;
+        }
+        deferBuf[deferHead] = *str++;
+        std::atomic_thread_fence(std::memory_order_release); // Byte VOR head-Inkrement sichtbar
+        deferHead = next;
+    }
+}
+void SerialMirror::deferLog(const __FlashStringHelper *str)
+{
+    PGM_P p = reinterpret_cast<PGM_P>(str);
+    char c;
+    while ((c = pgm_read_byte(p++)) != 0) {
+        uint16_t next = (uint16_t)((deferHead + 1) % DEFER_SIZE);
+        if (next == deferTail) {
+            return;
+        }
+        deferBuf[deferHead] = c;
+        std::atomic_thread_fence(std::memory_order_release); // Byte vor Head sichtbar
+        deferHead = next;
+    }
+}
+
+// Aus loop() aufrufen: leert den Ring im sicheren Kontext
+void SerialMirror::processDeferred()
+{
+    while (deferTail != deferHead) {
+        std::atomic_thread_fence(std::memory_order_acquire);
+        addToBuffer(deferBuf[deferTail]);
+        deferTail = (uint16_t)((deferTail + 1) % DEFER_SIZE);
+    }
+}
+
 // Global instance
 SerialMirror SerialM;
 

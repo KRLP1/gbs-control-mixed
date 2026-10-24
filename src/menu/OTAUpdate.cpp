@@ -235,6 +235,8 @@ String FirmwareUpdater::resolveRedirect(const String& url) {
                 if (line.length() == 0) {
                     break; // End of headers
                 }
+            } else {
+                delay(1); // Verbindung haelt ohne Daten: WDT + WiFi/TCP-Stack pumpen
             }
         }
         
@@ -464,13 +466,14 @@ FirmwareUpdater::UpdateStatus FirmwareUpdater::performUpdate(void (*progressCall
                         Serial.println(F(")"));
                     }
                 }
-                
-                if (written % (contentLength / 100) == 0) {
+
+                // Guard gegen Div/0 bei Content-Length < 100
+                if (contentLength >= 100 && (written % (contentLength / 100) == 0)) {
 #ifdef ESP8266
                     ESP.wdtFeed();
 #endif
                 }
-                
+
                 yield();
             }
         } else {

@@ -26,6 +26,7 @@ extern void loadDefaultUserOptions();
 extern uint8_t getVideoMode();
 extern runTimeOptions *rto;
 extern userOptions *uopt;
+extern String slotIndexMap; // Slot-Index 0..71 -> Slot-Zeichen
 extern const char *ap_ssid;
 extern const char *ap_password;
 extern const char *device_hostname_full;
@@ -137,7 +138,12 @@ bool presetSelectionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
     display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
     display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Geladen");
     display->display();
-    uopt->presetSlot = 'A' + item->tag; // ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~()!*:,
+    // item->tag = Slot-Index (0..71), nicht das Slot-Zeichen
+    if (item->tag >= slotIndexMap.length()) {
+        manager->unfreeze(); // ungültiger Index: Slot nicht überschreiben
+        return false;
+    }
+    uopt->presetSlot = slotIndexMap[item->tag];
     uopt->presetPreference = PresetPreference::OutputCustomized;
     saveUserPrefs();
     if (rto->videoStandardInput == 14) {

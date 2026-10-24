@@ -677,6 +677,43 @@ void handleType2Command(char argument)
                 SerialM.println("YPbPr:defauit");
             }
             break;
+        case 'V': {
+            // /gbs/restore-filters: Slot-Filter aus slots.bin wiederherstellen.
+            // Läuft hier im loop()-Kontext (I2C + LittleFS).
+            static SlotMetaArray slots; // 2,3 KB, static statt Stack
+            File f = LittleFS.open(SLOTS_FILE, "r");
+            bool ok = false;
+            if (f) {
+                size_t slotsRead = f.read((byte *)&slots, sizeof(slots));
+                f.close();
+                if (slotsRead == sizeof(slots)) {
+                    int currentSlot = slotIndexMap.indexOf(uopt->presetSlot);
+                    if (currentSlot >= 0) {
+                        uopt->wantScanlines = slots.slot[currentSlot].scanlines;
+
+                        SerialM.print(F("slot: "));
+                        SerialM.println(uopt->presetSlot);
+                        SerialM.print(F("scanlines: "));
+                        if (uopt->wantScanlines) {
+                            SerialM.println(F("on (Line Filter recommended)"));
+                        } else {
+                            disableScanlines();
+                            SerialM.println("off");
+                        }
+                        saveUserPrefs();
+
+                        uopt->scanlineStrength = slots.slot[currentSlot].scanlinesStrength;
+                        uopt->wantVdsLineFilter = slots.slot[currentSlot].wantVdsLineFilter;
+                        uopt->wantStepResponse = slots.slot[currentSlot].wantStepResponse;
+                        uopt->wantPeaking = slots.slot[currentSlot].wantPeaking;
+                        ok = true;
+                    }
+                }
+            }
+            if (!ok) {
+                SerialM.println(F("restore filters failed"));
+            }
+        } break;
         default:
             break;
     }

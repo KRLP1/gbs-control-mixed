@@ -19,8 +19,9 @@ void handleWiFi(boolean instant)
         MDNS.update();
 #endif
 
-        webSocket.loop();
-        
+        webSocket.loop();      // No-op im ESP8266-ASYNC-Modus
+        webSocketHeartbeat();  // Ersatz-Heartbeat (Fix 10b)
+
         persWM.handleWiFi(); // if connected, returns instantly. otherwise it reconnects or opens AP
 
         // Only process DNS requests if we are in AP mode (Captive Portal)
@@ -30,7 +31,7 @@ void handleWiFi(boolean instant)
         }
 
         if ((millis() - lastTimePing) > 953) { // slightly odd value so not everything happens at once
-            // Note: ping/pong now handled by webSocket.enableHeartbeat() in setup()
+
         }
         if (((millis() - lastTimePing) > 973) || instant) {
             if ((webSocket.connectedClients(false) > 0) || instant) { // true = with compliant ping

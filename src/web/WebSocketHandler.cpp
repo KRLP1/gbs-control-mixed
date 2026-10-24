@@ -132,4 +132,42 @@ void updateWebSocketData()
         }
     }
 }
+// Letzter Pong-Empfang pro Client-Slot (WEBSOCKETS_SERVER_CLIENT_MAX = 2).
+// Handler laeuft im Async-Kontext: nur 32-Bit-Store, auf Xtensa atomar.
+static uint32_t wsLastPong[WEBSOCKETS_SERVER_CLIENT_MAX] = {0};
+
+void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *, size_t)
+{
+    if (num >= WEBSOCKETS_SERVER_CLIENT_MAX) {
+        return;
+    }
+    if (type == WStype_CONNECTED) {
+        wsLastPong[num] = millis(); // Start der Toleranzzeit
+    } else if (type == WStype_PONG) {
+        wsLastPong[num] = millis(); // Browser antworten protokollseitig (RFC 6455)
+    }
+}
+
+// Alle 2s pingen, nach >6s ohne Pong disconnectieren (toter Client).
+// Aufruf aus handleWiFi() = loop()-Kontext.
+void webSocketHeartbeat()
+{
+    static uint32_t lastTick = 0;
+    uint32_t now = millis();
+    if (now - lastTick < 2000) {
+        return;
+    }
+    lastTick = now;
+
+    for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
+        if (!webSocket.clientIsConnected(i)) {
+            continue;
+        }
+        if (wsLastPong[i] != 0 && (now - wsLastPong[i]) > 6000) {
+            webSocket.disconnect(i); // Zombie: Slot freigeben
+            continue;
+        }
+        webSocket.sendPing(i);
+    }
+}
 

@@ -132,11 +132,8 @@ void PersWiFiManager::startApMode()
 {
     //start AP mode
     IPAddress apIP(192, 168, 4, 1);
-#ifdef ESP8266
-    WiFi.disconnect(true); // true = erase STA credentials from this session
-#else
-    WiFi.disconnect(true, true); // true = erase STA credentials
-#endif
+    // Nur Verbindung trennen - (true,true) löscht auf ESP32 die NVS-Credentials
+    WiFi.disconnect(false);
     delay(100);
     WiFi.mode(WIFI_AP);
     delay(100);

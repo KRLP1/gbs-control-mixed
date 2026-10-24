@@ -1,6 +1,7 @@
 #include "WebServer.h"
 #include "../core/Globals.h"
 #include "../web/SerialMirror.h"
+#include "../web/WebSocketHandler.h" // webSocketEventHandler
 #include "../config/WiFiConfig.h"
 #include "../storage/PreferencesManager.h"
 #include "../video/Scanlines.h"
@@ -99,7 +100,7 @@ void startWebserver()
                 char cmd = p->name().charAt(0);
                 if (cmd == ' ') cmd = '+';  // hack, problem with '+' command received via url param
                 if (!serialCommandQueue.push(cmd)) {
-                    SerialM.println(F("Warning: serial command queue full, dropping"));
+                    SerialM.deferLog(F("Warning: serial command queue full, dropping\n"));
                 }
             }
             request->send(200); // reply
@@ -115,7 +116,7 @@ void startWebserver()
                 const AsyncWebParameter *p = request->getParam(0);
                 //Serial.println(p->name());
                 if (!userCommandQueue.push(p->name().charAt(0))) {
-                    SerialM.println(F("Warning: user command queue full, dropping"));
+                    SerialM.deferLog(F("Warning: user command queue full, dropping\n"));
                 }
             }
             request->send(200); // reply
@@ -159,7 +160,7 @@ void startWebserver()
             esp_wifi_set_storage(WIFI_STORAGE_FLASH);
             esp_wifi_set_config(WIFI_IF_STA, &conf);
             
-            SerialM.println("Saved WiFi creds to NVS (ESP32) - Safe Method");
+            SerialM.deferLog("Saved WiFi creds to NVS (ESP32) - Safe Method\n");
 #else
             // ESP8266 logic
             // Backported from JuergenLeber/gbs-control: don't call WiFi.begin() here - it invokes
@@ -180,9 +181,11 @@ void startWebserver()
         WiFi.persistent(false);
 #endif
 
-        userCommand = 'u'; // next loop, set wifi station mode and restart device
+        // Über die Queue statt direkt: sonst Lost-Update gegen loop():1683
+        if (!userCommandQueue.push('u')) {
+            SerialM.deferLog(F("Warning: user command queue full, dropping\n"));
+        }
     });
-
     server.on("/bin/slots.bin", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (ESP.getFreeHeap() > 10000) {
             SlotsScratch scratch;
@@ -242,6 +245,29 @@ void startWebserver()
             int params = request->params();
 
             if (params >= 2) {
+                // index param - benannt statt positional: Reihenfolge- und
+                // Parameter-Unabhängigkeit (z.B. Cache-Buster am Ende).
+                // WICHTIG: Validierung VOR jedem LittleFS-Zugriff weiter unten.
+                const AsyncWebParameter *slotIndexParam = request->getParam("index");
+                if (slotIndexParam == nullptr) {
+                    goto fail;
+                }
+                const long slotIndexValue = slotIndexParam->value().toInt();
+                if (slotIndexValue < 0 || slotIndexValue >= SLOTS_TOTAL) {
+                    goto fail;
+                }
+                const uint8_t slotIndex = static_cast<uint8_t>(slotIndexValue);
+
+                // name param
+                const AsyncWebParameter *slotNameParam = request->getParam("name");
+                if (slotNameParam == nullptr) {
+                    goto fail;
+                }
+                String slotName = slotNameParam->value();
+                if (!slotName.length()) {
+                    goto fail; // leerer Name: Slot nicht unbenannt überschreiben
+                }
+
                 SlotsScratch scratch;
                 if (!scratch.ok()) {
                     request->send(200, "application/json", "false");
@@ -277,24 +303,6 @@ void startWebserver()
                     slotsBinaryFileWrite.close();
                 }
 
-                // index param
-                const AsyncWebParameter *slotIndexParam = request->getParam(0);
-                if (slotIndexParam == nullptr) {
-                    goto fail;
-                }
-                const long slotIndexValue = slotIndexParam->value().toInt();
-                if (slotIndexValue < 0 || slotIndexValue >= SLOTS_TOTAL) {
-                    goto fail;
-                }
-                const uint8_t slotIndex = static_cast<uint8_t>(slotIndexValue);
-
-                // name param
-                const AsyncWebParameter *slotNameParam = request->getParam(1);
-                if (slotNameParam == nullptr) {
-                    goto fail;
-                }
-                String slotName = slotNameParam->value();
-
                 char emptySlotName[25] = "                        ";
                 strncpy(slotsObject->slot[slotIndex].name, emptySlotName, 25);
 
@@ -328,7 +336,7 @@ void startWebserver()
             char param = p->name().charAt(0);
             if (param == '0')
             {
-                SerialM.println("Wait...");
+                SerialM.deferLog("Wait...\n");
                 result = true;
             }
             else
@@ -360,7 +368,7 @@ void startWebserver()
                 // genuinely corrupted metadata files.
                 bool slotsMetadataOk = (currentSlot >= 0 && slotsRead == sizeof(*slotsObject));
                 if (!slotsMetadataOk) {
-                    SerialM.println(F("slot remove: slot data unreadable, forcing delete"));
+                    SerialM.deferLog(F("slot remove: slot data unreadable, forcing delete\n"));
                 }
                 String slotName = slotsMetadataOk
                     ? String(slotsObject->slot[currentSlot].name)
@@ -415,7 +423,8 @@ void startWebserver()
                     slotsBinaryFileWrite.close();
                 }
 
-                SerialM.println("Preset \"" + slotName + "\" removed");
+                String removedMsg = "Preset \"" + slotName + "\" removed\n";
+                SerialM.deferLog(removedMsg.c_str());
                 result = true;
             }
         }
@@ -508,10 +517,6 @@ void startWebserver()
         request->send(200, "application/json", "false");
     });
 
-    server.on("/filesystem/format", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", LittleFS.format() ? "true" : "false");
-    });
-
     server.on("/wifi/status", HTTP_GET, [](AsyncWebServerRequest *request) {
         WiFiMode_t wifiMode = WiFi.getMode();
         request->send(200, "application/json", wifiMode == WIFI_AP ? "{\"mode\":\"ap\"}" : "{\"mode\":\"sta\",\"ssid\":\"" + WiFi.SSID() + "\"}");
@@ -538,7 +543,10 @@ void startWebserver()
                     device_hostname = hn;
                 }
                 request->send(200, "application/json", "{\"hostname\":\"" + hn + "\"}");
-                userCommand = 'a'; // restart
+                // Über die Queue statt direkt (gleicher Grund wie /wifi/connect)
+                if (!userCommandQueue.push('a')) {
+                    SerialM.deferLog(F("Warning: user command queue full, dropping\n"));
+                }
                 return;
             }
         }
@@ -580,47 +588,13 @@ void startWebserver()
     });
 
     server.on("/gbs/restore-filters", HTTP_GET, [](AsyncWebServerRequest *request) {
-        SlotsScratch scratch; // declared before the gotos so they cannot skip its construction
-        bool result = false;
-        if (!scratch.ok()) {
-            goto fail;
+        // Nur einordnen: I2C (disableScanlines) und LittleFS (slots.bin lesen,
+        // saveUserPrefs) gehören in den loop()-Kontext, nicht in den Async-Task.
+        if (userCommandQueue.push('V')) {
+            request->send(200, "application/json", "true");
+        } else {
+            request->send(200, "application/json", "false");
         }
-        {
-        File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
-        if (slotsBinaryFileRead) {
-            size_t slotsRead = slotsBinaryFileRead.read((byte *)slotsObject, sizeof(*slotsObject));
-            slotsBinaryFileRead.close();
-            if (slotsRead != sizeof(*slotsObject)) {
-                goto fail; // short file, the rest of slotsObject was never filled in
-            }
-            auto currentSlot = slotIndexMap.indexOf(uopt->presetSlot);
-            if (currentSlot == -1) {
-                goto fail;
-            }
-
-            uopt->wantScanlines = slotsObject->slot[currentSlot].scanlines;
-
-            SerialM.print(F("slot: "));
-            SerialM.println(uopt->presetSlot);
-            SerialM.print(F("scanlines: "));
-            if (uopt->wantScanlines) {
-                SerialM.println(F("on (Line Filter recommended)"));
-            } else {
-                disableScanlines();
-                SerialM.println("off");
-            }
-            saveUserPrefs();
-
-            uopt->scanlineStrength = slotsObject->slot[currentSlot].scanlinesStrength;
-            uopt->wantVdsLineFilter = slotsObject->slot[currentSlot].wantVdsLineFilter;
-            uopt->wantStepResponse = slotsObject->slot[currentSlot].wantStepResponse;
-            uopt->wantPeaking = slotsObject->slot[currentSlot].wantPeaking;
-            result = true;
-        }
-        }
-
-        fail:
-        request->send(200, "application/json", result ? "true" : "false");
     });
 
     //webSocket.onEvent(webSocketEvent);
@@ -659,11 +633,11 @@ void startWebserver()
     }
 #endif
 
-    server.begin();    // Webserver for the site
-    webSocket.begin(); // Websocket for interaction
-    // Enable heartbeat: ping every 2000ms, pong timeout 3000ms, disconnect after 2 missed pongs
-    // This keeps the connection alive during idle periods (client has 2.7s timeout)
-    webSocket.enableHeartbeat(2000, 3000, 2);
+    webSocket.onEvent(webSocketEventHandler); // Pong-Tracking fuer Fix 10
+    server.begin();                          // Webserver for the site
+    webSocket.begin();                       // Websocket for interaction
+    // Heartbeat: enableHeartbeat() ist im ESP8266-ASYNC-Modus wegkompiliert
+    // (WebSocketsServer.cpp handleClientData). App-Level-Ersatz: Fix 10b/10d.
     yield();
 
 #ifdef HAVE_PINGER_LIBRARY
