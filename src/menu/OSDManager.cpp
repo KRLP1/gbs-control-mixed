@@ -26,20 +26,6 @@ bool osdBrightness(OSDMenuConfig &config)
     config.barActiveLength = (cur + 128 + 1) / STEP;
     return true;
 }
-bool osdAutoGain(OSDMenuConfig &config)
-{
-    config.barLength = 2;
-    if (config.onChange) {
-        uopt->enableAutoGain = config.inc ? 1 : 0;
-        saveUserPrefs();
-    }
-    if (uopt->enableAutoGain == 1) {
-        config.barActiveLength = 2;
-    } else {
-        config.barActiveLength = 0;
-    }
-    return true;
-}
 bool osdScanlines(OSDMenuConfig &config)
 {
     if (config.onChange) {
@@ -178,7 +164,8 @@ void initOSD()
     osdManager.registerIcon(OSDIcon::BRIGHTNESS, osdBrightness);
     osdManager.registerIcon(OSDIcon::CONTRAST, osdContrast);
 
-    // consufuing, disabled for now
+    // Bewusst geparkt (Upstream: "confusing, disabled for now"): die Handler
+    // bleiben erhalten, falls die Icon-Belegung spaeter geklaert wird.
     // osdManager.registerIcon(OSDIcon::HUE, osdScanlines);
     // osdManager.registerIcon(OSDIcon::VOLUME, osdLineFilter);
 

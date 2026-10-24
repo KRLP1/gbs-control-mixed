@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.4.7] – OSD Cleanup: Dead Code Removal, Default Initializers
+
+### Changed
+- OSDManager members now have default initializers (cursor = 0,
+  state = OSDState::OFF, preset = 0) instead of relying on BSS
+  zero-initialization of the single global instance. Protects against
+  garbage reads if the class is ever instantiated on the stack or heap.
+- Comment on the parked OSD handlers (osdScanlines, osdLineFilter)
+  updated to document why they are kept but not registered.
+
+### Removed
+- osdAutoGain() OSD menu handler: dead code, never registered to any
+  icon in any version. The WebUI Auto-Gain button uses a completely
+  separate code path (command 'T') and is unaffected.
+- Unused OSDManager members curVal, curMax, displayInColumn.
+
+No functional changes.
+
 ## [v1.4.6] – Hardening: Async Safety, Crash Fixes, WiFi Retention
 
 ### Fixed

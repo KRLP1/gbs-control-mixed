@@ -16,7 +16,6 @@ struct OSDMenuConfig
 typedef bool (*OSDHanlder)(OSDMenuConfig &config);
 bool osdBrightness(OSDMenuConfig &config);
 bool osdContrast(OSDMenuConfig &config);
-bool osdAutoGain(OSDMenuConfig &config);
 bool osdScanlines(OSDMenuConfig &config);
 bool osdLineFilter(OSDMenuConfig &config);
 bool osdMoveX(OSDMenuConfig &config);
@@ -75,12 +74,9 @@ private:
         MAIN,
         SUB,
     };
-    uint8_t cursor;
-    uint8_t curVal;
-    uint8_t curMax;
+    uint8_t cursor = 0; // Initializer statt auf BSS-Nullung zu vertrauen
     OSDHanlder handlers[8];
-    OSDState state;
-    bool displayInColumn;
+    OSDState state = OSDState::OFF;
     void rstOn()
     {
         GBS::OSD_SW_RESET::write(true);
@@ -112,7 +108,7 @@ public:
     {
         memset(&this->handlers, 0, sizeof(this->handlers));
     }
-    uint8_t preset;
+    uint8_t preset = 0; // wird aktuell nirgends gesetzt -> resetPosition() nimmt immer den default-Zoom
     void registerIcon(OSDIcon icon, OSDHanlder handler)
     {
         this->handlers[(uint8_t)icon] = handler;
