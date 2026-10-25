@@ -1775,7 +1775,10 @@ void loop()
                 if (rto->syncLockFailIgnore == 0) {
                     FrameSync::reset(uopt->frameTimeLockMethod); // in case run() failed because we lost sync signal
                 }
-            } else if (rto->syncLockFailIgnore > 0) {
+            } else if (rto->syncLockFailIgnore != 16) {
+                // Every success re-arms the failure tolerance, also from 0.
+                // The failure path above no longer wraps 0 -> 255, so "> 0" would
+                // leave a depleted counter disarmed.
                 rto->syncLockFailIgnore = 16;
             }
             //Serial.println(millis() - startTime);

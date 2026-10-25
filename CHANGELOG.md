@@ -1,5 +1,33 @@
 # Changelog
 
+## [v1.4.9] – Frame-Sync Re-Arm Fix + Documentation Corrections
+
+### Fixed
+- Frame Time Lock: the success branch of the frame-sync block in loop()
+  now re-arms `syncLockFailIgnore` to 16 on every successful
+  `FrameSync::run*()`, including from state 0 (`!= 16` instead of
+  `> 0`). Since v1.4.6 the failure-path decrement is guarded (no more
+  0 -> 255 wrap), so the old `> 0` condition could never re-arm a
+  counter that had reached 0 and the 16-failure glitch tolerance stayed
+  gone until the next preset load or successful `runAutoBestHTotal()`.
+  Behavior for counter values 1..16 and the failure path (decrement,
+  single reset at 0) are unchanged.
+
+### Changed
+- No behavior change. Corrected the v1.4.8 notes on the `VDS_HB_ST` and
+  `IF_HSYNC_RST` guards: the old expressions `(read() - 5) > 0` and
+  `(read() - 4) > ...` could not underflow. Both registers are 12/11 bit,
+  `read()` returns `uint16_t`, and integer promotion evaluates the
+  subtraction as signed `int`, so a value below the constant gave a
+  negative result and a false comparison. The v1.4.8 rewrites are
+  behavior-identical; they only make the lower bound explicit.
+- PersWiFiManager: rewrote the comment on `WiFi.disconnect(false)`. The
+  argument only controls whether station mode is switched off; the call
+  always clears the configured SSID/password. On ESP8266 whether that
+  reaches flash depends on `WiFi.persistent()` (true only on the
+  new-credentials path, where `WiFi.begin()` overwrites it right away;
+  false on the empty-SSID path, so saved credentials survive).
+
 ## [v1.4.8] – Wrap-Guard Hardening + Dead-Code Removal
 
 ### Fixed

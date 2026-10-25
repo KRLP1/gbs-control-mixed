@@ -50,8 +50,15 @@ bool PersWiFiManager::attemptConnection(const String &ssid, const String &pass)
 #endif
     delay(100);
     
-    // Properly disconnect before mode change
-    WiFi.disconnect(false); // false = don't erase credentials
+    // Properly disconnect before mode change.
+    // WiFi.disconnect(false): its argument only controls whether station
+    // mode is switched off; the call always clears the configured
+    // SSID/password. On ESP8266, whether that reaches flash depends on
+    // WiFi.persistent() (see above): true only on the new-credentials path,
+    // where the rewrite is harmless because WiFi.begin() below stores the
+    // new credentials anyway; false on the empty-SSID path, so the stored
+    // credentials survive. On ESP32 eraseap defaults to false (NVS kept).
+    WiFi.disconnect(false);
     delay(200); // Increased delay for stability
     WiFi.mode(WIFI_STA);
     delay(200); // Increased delay for stability
