@@ -3,14 +3,19 @@
 ## [v1.4.8] – Wrap-Guard Hardening + Dead-Code Removal
 
 ### Fixed
-- Unsigned guard trap in VideoScaling.cpp: `(GBS::VDS_HB_ST::read() - 5)
-  > 0` did not protect against unsigned underflow. If read() < 5, the
-  subtraction wraps to ~65530 and the comparison is true, writing 4094
-  (after 12-bit truncation) to the register. Changed to compare the
-  operand before subtraction: `read() > 5`.
-- Same unsigned guard trap in gbs-control.ino command '6':
-  `(IF_HSYNC_RST::read() - 4) > ...` had the same issue. Added
-  `IF_HSYNC_RST::read() > 4` short-circuit before the subtraction.
+- Guard rewrite in VideoScaling.cpp: `(GBS::VDS_HB_ST::read() - 5) > 0`
+  was changed to compare the operand before the subtraction:
+  `read() > 5`. Note: the old form could not underflow. VDS_HB_ST is a
+  12-bit register, read() returns uint16_t, and integer promotion makes
+  the subtraction a signed int operation, so for read() < 5 the result
+  was negative and the comparison false — the register write never
+  happened. The rewrite is behavior-identical; it makes the guard
+  explicit instead of relying on integer promotion rules.
+- Same guard rewrite in gbs-control.ino command '6': the added
+  `IF_HSYNC_RST::read() > 4` short-circuit before
+  `(IF_HSYNC_RST::read() - 4) > ...` is likewise behavior-neutral
+  (uint16_t read() promotes to signed int, so read() < 4 already made
+  the old comparison false); it documents the guard explicitly.
 - Per-target register width validation for serial command 'Y': the
   previous flat `value < 4096` check did not cover 11-bit targets (vt,
   vs*, vb*, if*, vsstc, vsspc) or the 5-bit sog register. Now uses
