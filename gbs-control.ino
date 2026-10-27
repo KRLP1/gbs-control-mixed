@@ -712,6 +712,7 @@ void loop()
 #endif
 
     handleWiFi(0); // WiFi + OTA + WS + MDNS, checks for server enabled + started
+    handleWiFiRetry(); // AP fallback: try the stored network again (top level of loop() only)
     
     // is there a command from Terminal or web ui?
     // Serial takes precedence

@@ -1,5 +1,35 @@
 # Changelog
 
+## [v1.4.10] – AP Fallback Auto-Retry
+
+### Added
+- AP fallback auto-retry: if the stored network cannot be reached and
+  the device falls back to AP mode, it now retries the stored network
+  in the background every 60 s while no client is connected to the
+  access point (15 s connect window per attempt) and returns to
+  station mode on its own as soon as the network is back. Previously
+  the device stayed in AP mode until it was power-cycled. New
+  `handleApRetry()`/`startStaRetry()` state machine in PersWiFiManager,
+  driven by `handleWiFiRetry()` from the top level of `loop()`, so WiFi
+  mode switches never run from video routines or async web server
+  handlers. On a successful retry the captive-portal DNS server is
+  stopped and the regular `onConnect` handler runs (mDNS), same as
+  after a normal boot. First-time setup is unaffected: booting without
+  stored credentials still opens AP mode directly, without a retry
+  loop.
+- ESP8266 flash wear protection: the retry works from a RAM copy of
+  the stored credentials (kept in `attemptConnection()` before
+  `WiFi.disconnect(false)` clears the station config; read from the
+  flash config at boot) and runs with `WiFi.persistent(false)`, so the
+  retry loop never rewrites flash. On ESP32, NVS credentials survive
+  `WiFi.disconnect(false)` and are reused via `WiFi.begin()` without
+  arguments, so no RAM copy is needed.
+
+### Fixed
+- OLED "Reset WiFi" (`MT_RESET_WIFI`) now also clears the fallback
+  retry state (`forgetStaCredentials()`), so the firmware no longer
+  retries credentials that were just erased on purpose.
+
 ## [v1.4.9] – Frame-Sync Re-Arm Fix + Documentation Corrections
 
 ### Fixed

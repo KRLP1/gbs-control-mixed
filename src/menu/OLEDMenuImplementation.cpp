@@ -9,6 +9,7 @@
 #include <ESPAsyncWebServer.h>
 #include "OLEDMenuImplementation.h"
 #include "OTAUpdate.h"
+#include "../wifi/WiFiManager.h"
 #include "../core/options.h"
 #include "../gbs/tv5725.h"
 #include "../core/slot.h"
@@ -274,6 +275,7 @@ bool resetMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav,
             // ESP32: erase saved AP config (credentials) explicitly
             WiFi.disconnect(true, true);
 #endif
+            wifiForgetRetryCredentials(); // credentials are gone on purpose, no AP fallback retry with the old ones
             break;
         case MT_RESTORE_FACTORY:
             loadDefaultUserOptions();

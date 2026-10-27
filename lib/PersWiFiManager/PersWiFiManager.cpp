@@ -25,10 +25,31 @@ PersWiFiManager::PersWiFiManager(AsyncWebServer &s, DNSServer &d)
     _apPass = "";
     _lastConnectionCheck = 0;
     _connectionLostTime = 0;
+    _connectTimeoutMs = 1000UL * WIFI_CONNECT_TIMEOUT;
+    _apFallback = false;
+    _retrying = false;
+    _apIdleSince = 0;
 } //PersWiFiManager
 
 bool PersWiFiManager::attemptConnection(const String &ssid, const String &pass)
 {
+    // AP fallback retry bookkeeping. Once this attempt fails and the device ends
+    // up in AP mode, startApMode() clears the station config in RAM on ESP8266
+    // (WiFi.disconnect(false), persistent off), so keep our own copy of the
+    // credentials that are being tried here. Nothing is written to flash.
+    _retrying = false;
+    _apFallback = false;
+    _connectTimeoutMs = 1000UL * WIFI_CONNECT_TIMEOUT;
+#ifdef ESP8266
+    if (ssid.length()) {
+        _staSsid = ssid;
+        _staPass = pass;
+    } else if (_staSsid.length() == 0) {
+        _staSsid = WiFi.SSID(); // stored credentials, loaded from flash at boot
+        _staPass = WiFi.psk();
+    }
+#endif
+
     //attempt to connect to wifi
     // Configure WiFi settings to avoid ESP8266 Core 3.1.x bug / flash wear.
     // IMPORTANT: On ESP32, WiFi.persistent(false) changes the underlying storage to RAM
@@ -122,21 +143,117 @@ void PersWiFiManager::handleWiFi()
 
     if (WiFi.status() == WL_CONNECTED) {
         _connectStartTime = 0;
+        _apFallback = false;
+        if (_retrying) {
+            // The AP fallback retry worked: the access point is already gone
+            // (WiFi.mode(WIFI_STA) in startStaRetry), release the captive portal DNS.
+            _retrying = false;
+            _dnsServer->stop();
+        }
         if (_connectHandler)
             _connectHandler();
         return;
     }
 
+    // An AP fallback retry that did not connect (yet) is finished by
+    // handleApRetry() from the top level of loop(), because going back to AP
+    // mode blocks for a few hundred milliseconds.
+    if (_retrying)
+        return;
+
     //if failed or not connected and time is up
-    if ((WiFi.status() == WL_CONNECT_FAILED) || ((WiFi.status() != WL_CONNECTED) && ((millis() - _connectStartTime) > (1000 * WIFI_CONNECT_TIMEOUT)))) {
+    if ((WiFi.status() == WL_CONNECT_FAILED) || ((WiFi.status() != WL_CONNECTED) && ((millis() - _connectStartTime) > _connectTimeoutMs))) {
+#ifdef ESP8266
+        _apFallback = (_staSsid.length() > 0); // retry needs the credentials
+#else
+        _apFallback = true; // stored config stays in NVS, WiFi.begin() reuses it
+#endif
         startApMode();
         _connectStartTime = 0; //reset connect start time
     }
 
 } //handleWiFi
 
+void PersWiFiManager::handleApRetry()
+{
+    unsigned long now = millis();
+
+    if (_retrying) {
+        // Retry in progress (handleWiFi() resets _retrying on success).
+        if (_connectStartTime == 0)
+            return;
+        // Ignore a leftover WL_CONNECT_FAILED from the previous attempt for the first 2 s.
+        if (((WiFi.status() == WL_CONNECT_FAILED) && ((now - _connectStartTime) > 2000)) || ((WiFi.status() != WL_CONNECTED) && ((now - _connectStartTime) > _connectTimeoutMs))) {
+            _retrying = false;
+            startApMode(); // back to the access point, sets _apIdleSince
+            _connectStartTime = 0;
+        }
+        return;
+    }
+
+    if (!_apFallback || WiFi.getMode() != WIFI_AP)
+        return;
+
+    // Look at the access point once per second only.
+    if ((now - _lastConnectionCheck) < 1000)
+        return;
+    _lastConnectionCheck = now;
+
+    if (WiFi.softAPgetStationNum() > 0) {
+        // Somebody is using the access point (e.g. configuring WiFi): leave it alone.
+        _apIdleSince = now;
+    } else if ((now - _apIdleSince) >= 1000UL * WIFI_AP_RETRY_INTERVAL) {
+        startStaRetry();
+    }
+} //handleApRetry
+
+void PersWiFiManager::startStaRetry()
+{
+#ifdef ESP8266
+    if (_staSsid.length() == 0)
+        return; // no credentials to try
+#endif
+    Serial.println(F("(WiFi): AP fallback: retrying stored network"));
+    _retrying = true;
+    _connectTimeoutMs = 1000UL * WIFI_AP_RETRY_CONNECT_TIMEOUT;
+#ifdef ESP8266
+    WiFi.persistent(false); // RAM only, never rewrite flash from a retry loop
+#endif
+    WiFi.mode(WIFI_STA);    // drops the access point
+    delay(100);
+#ifdef ESP8266
+    WiFi.hostname(device_hostname.c_str()); // before WiFi.begin();
+    if (_staPass.length())
+        WiFi.begin(_staSsid.c_str(), _staPass.c_str());
+    else
+        WiFi.begin(_staSsid.c_str());
+#else
+    WiFi.setHostname(device_hostname.c_str());
+    WiFi.begin();
+#endif
+    _connectStartTime = millis();
+    if (!_connectStartTime)
+        _connectStartTime = 1; // 0 means "not connecting"
+} //startStaRetry
+
+void PersWiFiManager::forgetStaCredentials()
+{
+    _staSsid = "";
+    _staPass = "";
+    _apFallback = false;
+    if (_retrying) {
+        // "Reset WiFi" just killed an in-flight retry (resetMenuHandler runs
+        // WiFi.disconnect() before this): flag the attempt as expired, so that
+        // handleApRetry()'s cleanup path brings the access point back on the
+        // next loop() pass - mode switches stay at the loop() top level.
+        _connectStartTime = 1; // any non-zero value; 0 means "not connecting"
+        _connectTimeoutMs = 0;
+    }
+} //forgetStaCredentials
+
 void PersWiFiManager::startApMode()
 {
+    _apIdleSince = millis();
     //start AP mode
     IPAddress apIP(192, 168, 4, 1);
     // Nur Verbindung trennen - (true,true) löscht auf ESP32 die NVS-Credentials

@@ -47,3 +47,14 @@ void handleWiFi(boolean instant)
     yield();
 }
 
+void handleWiFiRetry()
+{
+    if (rto->webServerEnabled && rto->webServerStarted) {
+        persWM.handleApRetry();
+    }
+}
+
+void wifiForgetRetryCredentials()
+{
+    persWM.forgetStaCredentials();
+}
