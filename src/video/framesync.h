@@ -71,6 +71,26 @@ namespace MeasurePeriod {
     extern volatile uint32_t isrPrepareCount;
     extern volatile uint32_t isrMeasureCount;
 
+    // First-Edge-Timeout (backport from upstream 55cd933, adapted):
+    // If no first edge has arrived at the debug pin within this time
+    // (startTime == 0), the wait loop aborts instead of spinning through
+    // the full 3,000,000 iterations (~210 ms on our 160 MHz build,
+    // ~420 ms at 80 MHz) and blocking loop()/WiFi completely while doing so.
+    // Only the "no edge at all" case is affected; a measurement that has
+    // started runs to completion unchanged (timestamps come from the ISRs,
+    // not from the poll loop -> measurement accuracy is unaffected).
+    // Measured worst-case latency of the first edge right after input
+    // detection: up to ~65 ms (upstream measurement); 120 ms = ~1.8x margin,
+    // covers 6 PAL frames. Upstream picks 200 ms (3x margin), but their build
+    // runs at 80 MHz - on our 160 MHz build, 200 ms would be almost
+    // ineffective against the ~210 ms legacy spin. A timeout set too tight
+    // is harmless: a failed attempt is retried automatically on the next
+    // loop() pass.
+#ifndef FIRST_EDGE_TIMEOUT_US
+#define FIRST_EDGE_TIMEOUT_US 120000
+#endif
+    static constexpr uint32_t firstEdgeTimeoutUs = FIRST_EDGE_TIMEOUT_US;
+
     void _risingEdgeISR_prepare();
     void _risingEdgeISR_measure();
 
@@ -114,9 +134,18 @@ private:
         ESP.wdtDisable();
 #endif
         MeasurePeriod::start();
+        const uint32_t firstEdgeWaitStart = micros();
 
         // typical: 300000 at 80MHz, 600000 at 160MHz
         for (uint32_t i = 0; i < 3000000; i++) {
+            // First-Edge-Timeout: checked only every 1024 iterations so the
+            // measurement path stays as fast as before. Only active while no
+            // first edge has arrived yet (startTime == 0); after that, never again.
+            if ((i & 0x3ff) == 0 && MeasurePeriod::startTime == 0 &&
+                (micros() - firstEdgeWaitStart) > MeasurePeriod::firstEdgeTimeoutUs) {
+                detachInterrupt(DEBUG_IN_PIN); // no signal: stop waiting
+                break;
+            }
             if (MeasurePeriod::armed) {
                 MeasurePeriod::armed = 0;
                 delay(7);
@@ -380,9 +409,18 @@ public:
         ESP.wdtDisable();
 #endif
         MeasurePeriod::start();
+        const uint32_t firstEdgeWaitStart = micros();
 
         // typical: 300000 at 80MHz, 600000 at 160MHz
         for (uint32_t i = 0; i < 3000000; i++) {
+            // First-Edge-Timeout: checked only every 1024 iterations so the
+            // measurement path stays as fast as before. Only active while no
+            // first edge has arrived yet (startTime == 0); after that, never again.
+            if ((i & 0x3ff) == 0 && MeasurePeriod::startTime == 0 &&
+                (micros() - firstEdgeWaitStart) > MeasurePeriod::firstEdgeTimeoutUs) {
+                detachInterrupt(DEBUG_IN_PIN); // no signal: stop waiting
+                break;
+            }
             if (MeasurePeriod::armed) {
                 MeasurePeriod::armed = 0;
                 delay(7);

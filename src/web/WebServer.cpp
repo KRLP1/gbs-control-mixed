@@ -22,6 +22,22 @@
 // Empty string for WiFi.begin() when no password
 static const String emptyWiFiPassword = "";
 
+// ETag for the embedded web UI served on "/" (backport from upstream 55cd933,
+// adapted). The page is ~170 kB, so the browser is told to cache it and only
+// revalidate with a tiny request (If-None-Match -> "304 Not Modified", no body).
+// The tag is built from the blob length plus the build timestamp of this
+// translation unit: webui_html.h is included only in this file, so any web UI
+// change forces a recompile here and thus produces a new ETag. After a firmware
+// update the browser therefore always fetches the new page, never a stale one.
+// Spaces are replaced because RFC 9110 forbids them inside an ETag value.
+// Computed once at boot (global-ctor time, same pattern as emptyWiFiPassword
+// above); request handlers are dispatched one at a time, so no locking needed.
+static const String webUiEtag = []() {
+    String e = String("\"") + webui_html_len + "-" + __DATE__ + "-" + __TIME__ + "\"";
+    e.replace(" ", "_");
+    return e;
+}();
+
 // Scratch buffer for the slot metadata file, used by the web handlers that read or rewrite it.
 // At SLOTS_TOTAL entries this is 2304 bytes: far too much for the stack of an async web handler on
 // this part, and too much to hold onto permanently either - the websocket log stands down when
@@ -81,10 +97,28 @@ void startWebserver()
 #endif
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // ETag/304 revalidation: if the browser presents a matching If-None-Match,
+        // reply with an empty 304 Not Modified instead of re-sending the ~170 kB
+        // page (~200 bytes on air instead). header() returns an empty String when
+        // the header is absent, which never matches, so a first visit (or a
+        // disabled cache) simply takes the normal 200 path below.
+        // This check sits intentionally in front of the free-heap gate: a 304
+        // costs only a few hundred bytes, far less than a full page response.
+        if (request->header("If-None-Match") == webUiEtag) {
+            AsyncWebServerResponse *response = request->beginResponse(304);
+            response->addHeader("ETag", webUiEtag);
+            response->addHeader("Cache-Control", "no-cache");
+            request->send(response);
+            return;
+        }
         //Serial.println("sending web page");
         if (ESP.getFreeHeap() > 10000) {
             AsyncWebServerResponse *response = request->beginResponse(200, "text/html", webui_html, webui_html_len);
             response->addHeader("Content-Encoding", "gzip");
+            // ETag + no-cache: cache the page, but revalidate on every reload, so
+            // an updated web UI (new ETag) is picked up immediately.
+            response->addHeader("ETag", webUiEtag);
+            response->addHeader("Cache-Control", "no-cache");
             request->send(response);
         }
     });

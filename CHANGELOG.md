@@ -1,5 +1,82 @@
 # Changelog
 
+## [v1.4.11] – Upstream Backports (Framesync Timeout, ETag/304, WebSocket Commands)
+
+### Added
+- Framesync first-edge timeout (backport from upstream 55cd933,
+  adapted): the measurement loop in `framesync.h` aborts after 120 ms
+  if no first edge has arrived at the debug pin (`startTime == 0`)
+  instead of spinning through the full 3,000,000 iterations (~210 ms
+  at 160 MHz, ~420 ms at 80 MHz) and blocking `loop()`/WiFi while
+  doing so. The check is performed only every 1024 iterations
+  (`(i & 0x3ff) == 0`) so the measurement path stays as fast as
+  before. Only the "no edge at all" case is affected; a measurement
+  that has started runs to completion unchanged (timestamps come from
+  the ISRs, not from the poll loop — measurement accuracy is
+  unaffected). `MeasurePeriod::start()` explicitly resets `startTime`
+  to 0 on every call, so the timeout check is armed again on every
+  entry. After a timeout break the function returns `(0, 0)` and
+  falls into the existing fail guard `if ((*start >= *stop) || *stop
+  == 0 || *start == 0) return false;` → `runVsync → false → ino:1773`
+  decrements `syncLockFailIgnore` (with wraparound guard) → orderly
+  retry. No new failure path is introduced, only the "no signal" path
+  becomes ~90 ms faster. The 120 ms value is tighter than upstream's
+  200 ms because 200 ms would be almost ineffective against the
+  ~210 ms legacy spin on the 160 MHz build; a too-tight timeout is
+  harmless, a failed attempt is retried automatically on the next
+  `loop()` pass.
+- HTTP ETag/304 revalidation for the embedded WebUI (backport from
+  upstream 55cd933, adapted): the `/` handler now sends an `ETag`
+  and `Cache-Control: no-cache`, so the browser caches the ~170 kB
+  page but revalidates with `If-None-Match` on every reload. On a
+  match the ESP replies with an empty `304 Not Modified` instead of
+  re-sending the full page (~200 bytes on air instead of ~170 kB).
+  The 304 path sits intentionally in front of the
+  `ESP.getFreeHeap() > 10000` gate, since a 304 costs only a few
+  hundred bytes, far less than a full page response. The tag is
+  built from `webui_html_len` plus the build timestamp of this
+  translation unit (`__DATE__`/`__TIME__`); since `webui_html.h` is
+  included only in this file, any WebUI change forces a recompile
+  here and thus produces a new ETag. After a firmware update (OTA or
+  USB) the browser therefore always fetches the new page, never a
+  stale cached one. Spaces in the tag are replaced with `_` (RFC
+  9110 forbids them inside an ETag value). Computed once at boot
+  (global-ctor time, same pattern as `emptyWiFiPassword`); request
+  handlers are dispatched one at a time, so no locking is needed.
+- WebSocket command dispatch: the WebUI can send single-char commands
+  (`'s'<cmd>` = serialCommand, `'u'<cmd>` = userCommand) over the
+  already-open WebSocket instead of opening a new TCP connection +
+  HTTP request per button press. Saves lwIP slots and heap on the
+  ESP8266. `sendWsCommand()` in the WebUI falls back to the existing
+  HTTP `/sc?`/`/uc?` endpoints when the socket is not
+  `readyState === 1`, so the WebUI keeps working right after a reboot
+  or while the socket is reconnecting. Server-side, the
+  `WStype_TEXT` branch in `WebSocketHandler.cpp` accepts a 2-byte
+  payload `'s'`/`'u'` + `<cmd>` and pushes into the same SPSC queues
+  with `std::atomic_thread_fence(memory_order_release)` that the
+  HTTP handlers already use; queue full → `deferLog` warning
+  (async-safe). On ESP8266, WebSocket events and HTTP handlers run
+  in the same non-preemptive async context → strictly SPSC. On
+  ESP32, WS events arrive via `webSocket.loop()` in the `loopTask`
+  and HTTP handlers in the `async_tcp` task — technically two
+  producers on the same queue, but worst case is one dropped command
+  (no overflow, no corruption; `head`/`tail` are atomic 8-bit stores
+  and the fences order the payload). The WebUI sends exactly one path
+  per click, never both, so this case does not occur in practice.
+- WebUI terminal text trimming: the terminal textarea is trimmed to
+  the last 20,000 characters once it exceeds 30,000. Large textareas
+  make every append slow on mobile browsers (repaint becomes
+  O(n²)); the trim keeps the display responsive. It is conservative:
+  only the oldest data is discarded, `queuedText` itself is never
+  touched.
+
+### Changed
+- `webui_html_len`: 173574 → 173883 (+309 bytes for the new JS code).
+- The gzip blob in `webui_html.h` now has `MTIME=0` (deterministic
+  build); the ETag uses `__DATE__`/`__TIME__` from `WebServer.cpp`
+  separately and remains build-time-dependent, as intended.
+- Verified twice against commit `d02d026`.
+
 ## [v1.4.10] – AP Fallback Auto-Retry
 
 ### Added

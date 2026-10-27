@@ -136,7 +136,7 @@ void updateWebSocketData()
 // Handler laeuft im Async-Kontext: nur 32-Bit-Store, auf Xtensa atomar.
 static uint32_t wsLastPong[WEBSOCKETS_SERVER_CLIENT_MAX] = {0};
 
-void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *, size_t)
+void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
     if (num >= WEBSOCKETS_SERVER_CLIENT_MAX) {
         return;
@@ -145,6 +145,17 @@ void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *, size_t)
         wsLastPong[num] = millis(); // Start der Toleranzzeit
     } else if (type == WStype_PONG) {
         wsLastPong[num] = millis(); // Browser antworten protokollseitig (RFC 6455)
+    } else if (type == WStype_TEXT && length == 2 && (payload[0] == 's' || payload[0] == 'u')) {
+        // Kommandos ueber den offenen WebSocket ("s<cmd>" = serialCommand, "u<cmd>" =
+        // userCommand): spart pro Tastendruck einen TCP-Handshake + HTTP-Request
+        // (lwIP-Slots, Heap). Die WebUI faellt auf /sc?//uc? (HTTP) zurueck, solange
+        // der Socket zu ist. Gleiche Queues wie die HTTP-Handler; SPSC + Fences,
+        // Warnung via deferLog, weil dieser Callback im Async-Kontext laeuft.
+        const bool queued = (payload[0] == 's') ? serialCommandQueue.push((char)payload[1])
+                                                : userCommandQueue.push((char)payload[1]);
+        if (!queued) {
+            SerialM.deferLog(F("Warning: ws command queue full, dropping\n"));
+        }
     }
 }
 
