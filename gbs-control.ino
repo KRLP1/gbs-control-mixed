@@ -148,44 +148,57 @@
 // Menu and FrameSync are now defined in src/core/Globals.h
 // TODO replace result with VideoStandardInput enum
 
-// 960p-Windowbox: 240p/288p -> 960 Zeilen (4:3) im 1080p-Rahmen.
-// videoMode: 1/3 = NTSC, 2/4 = PAL (Parameter statt rto->videoStandardInput,
-// weil applyPresets() den Modus erst am Ende selbst setzt).
-// WICHTIG (PAL): PLLAD_MD nur mit VCORST-Reset-Sequenz aendern, sonst Gruenbild.
+// 960p windowbox: 240p/288p -> 960 lines (4:3) within a 1080p frame.
+// videoMode: 1/3 = NTSC, 2/4 = PAL (parameter instead of rto->videoStandardInput,
+// because applyPresets() sets the mode itself only at the end).
+// IMPORTANT (PAL): change PLLAD_MD only with the VCORST reset sequence,
+// otherwise the screen turns green.
 void applyWindowbox960(uint8_t videoMode)
 {
     bool isPal = (videoMode == 2 || videoMode == 4);
     rto->videoStandardInput = videoMode;
 
     if (isPal) {
-        // Basis: unangetastetes Stock-Preset
+        // Base: unmodified stock preset
         writeProgramArrayNew(pal_1920x1080, false);
         doPostPresetLoadSteps();
 
-        // Vertikal: 960-Zeilen-Fenster, um 16 Zeilen nach unten
+        // Vertical: 960-line window, shifted down by 16 lines
         GBS::VDS_VB_ST::write(40);
         GBS::VDS_VB_SP::write(42);
         GBS::VDS_DIS_VB_ST::write(1058);
         GBS::VDS_DIS_VB_SP::write(98);
         GBS::VDS_VSCALE::write(479);
-        // Eingangsfenster vertikal fest verdrahtet (Stock 38/40 + 22):
-        // macht das Windowbox unabhaengig von der Full-Height-Option
+        // Input window hard-wired vertically (stock 38/40 + 22):
+        // makes the windowbox independent of the full-height option
         GBS::IF_VB_ST::write(60);
         GBS::IF_VB_SP::write(62);
 
-        // Eingangs-Gatter (bewaehrt, Spike-Fix)
+        // Input gating (proven, spike fix)
         GBS::IF_HB_SP1::write(76);
         GBS::IF_HB_SP2::write(116);
 
-        // Horizontal: 4:3, auf 32"-Loewe kalibriert (46,4 x 34,8 cm)
+        // IF_HBIN_SP is the left edge of the visible canvas: everything left
+        // of it is cropped away. Field-measured (2026-10) together with
+        // PLLAD_MD=2249 below: 208 shows the complete test pattern
+        // (47.0 x 35.0 cm, bars centered). Re-measure after any
+        // PLLAD_MD change.
+        GBS::IF_HBIN_SP::write(208);
+
+        // Horizontal: 4:3, calibrated on a 32-inch Loewe (originally 46.4 x 34.8 cm;
+        // the complete test pattern now measures 47.0 x 35.0 cm)
         GBS::VDS_HB_SP::write(227);
         GBS::VDS_HB_ST::write(1258);
         GBS::VDS_DIS_HB_SP::write(327);
         GBS::VDS_DIS_HB_ST::write(1258);
 
-        // 4:3 via Sampling-Dichte, mit PLL-Reset-Sequenz
+        // 4:3 via sampling density, with PLL reset sequence.
+        // Picture width is proportional to MD (2373: 49.5 cm, 2249: 47.0 cm).
+        // 2249 is the lowest working value (field-measured: 2248 and below break
+        // up, cause not determined; IF_HSYNC_RST = MD/2 is 1124 for both 2248 and
+        // 2249 due to integer division, equal to IF_HB_ST2, i.e. no buffer left).
         {
-            uint16_t targetMD = 2373;
+            uint16_t targetMD = 2249;
             GBS::PLLAD_MD::write(targetMD);
             GBS::IF_HSYNC_RST::write(targetMD / 2);
             GBS::IF_LINE_SP::write((targetMD / 2) + 1 + 0x40);
@@ -204,6 +217,13 @@ void applyWindowbox960(uint8_t videoMode)
         GBS::IF_VB_ST::write(510);
         GBS::IF_VB_SP::write(512);
         GBS::VDS_Y_DELAY::write(2);
+
+        // IF_HBIN_SP is the left edge of the visible canvas; lowering it moves
+        // the picture content to the right. Field-measured (2026-10): 202 is
+        // complete but sits ~1.5 cm too far left; 138 is the lowest value that
+        // still shows everything with VDS_DIS_HB_ST at its maximum, 146 is
+        // centered (46.4 x 32.6 cm test pattern, equal bars).
+        GBS::IF_HBIN_SP::write(146);
         {
             uint16_t targetMD = 2491;
             GBS::PLLAD_MD::write(targetMD);
@@ -217,11 +237,14 @@ void applyWindowbox960(uint8_t videoMode)
         GBS::VDS_HB_SP::write(242);
         GBS::VDS_HB_ST::write(1294);
         GBS::VDS_DIS_HB_SP::write(360);
-        GBS::VDS_DIS_HB_ST::write(1294);
+        // Display window end: with 1294 the last tile column on the right was
+        // masked off. 1328 is the field-measured maximum (1329 and up shows
+        // interference pixels on the right); 1326 keeps a small margin.
+        GBS::VDS_DIS_HB_ST::write(1326);
     }
 
-    // eigene Preset-ID (0x07, unbenutzt), damit OLED-Anzeige, WebUI-Button-
-    // Highlighting und Slot-Namen spaeter den Modus korrekt anzeigen
+    // Custom preset ID (0x07, unused) so that the OLED display, WebUI button
+    // highlighting, and slot names will correctly display the mode later
     GBS::GBS_PRESET_ID::write(0x07);
     rto->presetID = 0x07;
 

@@ -1,5 +1,47 @@
 # Changelog
 
+## [v1.5.0] – 960p Windowbox Calibration Refinements
+
+### Added
+- `IF_HBIN_SP` is now explicitly written in both branches of
+  `applyWindowbox960()` (PAL: 208, NTSC: 146). Previously the register
+  kept its default value, so the left edge of the visible canvas was
+  undefined. `IF_HBIN_SP` is the left edge of the visible canvas;
+  everything left of it is cropped away. The PAL value 208 was
+  field-measured together with the new `PLLAD_MD=2249` (2026-10):
+  208 shows the complete test pattern (47.0 x 35.0 cm, centered, equal
+  side bars). The NTSC value 146 was field-measured the same way: 202
+  is complete but ~1.5 cm too far left; 138 is the lowest value that
+  still shows everything with `VDS_DIS_HB_ST` at its maximum; 146 is
+  centered (46.4 x 32.6 cm test pattern, equal bars). Re-measure
+  `IF_HBIN_SP` after any `PLLAD_MD` change.
+
+### Changed
+- PAL `PLLAD_MD` in `applyWindowbox960()`: 2373 → 2249. Picture width
+  is proportional to `PLLAD_MD` (2373: 49.5 cm, 2249: 47.0 cm on the
+  reference display). 2249 is the lowest working value — 2248 and
+  below break up, cause not determined. Note: `IF_HSYNC_RST =
+  PLLAD_MD / 2` is 1124 for both 2248 and 2249 due to integer
+  division, equal to `IF_HB_ST2`, i.e. no buffer left, which is
+  consistent with the breakup observed at 2248.
+- NTSC `VDS_DIS_HB_ST` in `applyWindowbox960()`: 1294 → 1326. With
+  1294 the last tile column on the right was masked off; 1328 is the
+  field-measured maximum (1329 and up shows interference pixels on
+  the right edge); 1326 keeps a small safety margin while showing the
+  full picture.
+- Comments in `applyWindowbox960()` translated from German to English
+  to match the rest of the codebase.
+
+### Notes
+- All PAL and NTSC measurements were taken on the same reference
+  display (originally 46.4 x 34.8 cm active area for the stock
+  preset). Users with different displays may need to re-tune
+  `IF_HBIN_SP` and `PLLAD_MD` for PAL, and `IF_HBIN_SP` and
+  `VDS_DIS_HB_ST` for NTSC.
+- The new defaults are intentionally on the safe side (slightly
+  smaller picture, full content visible, centered) rather than
+  maximum size with cropping.
+
 ## [v1.4.11] – Upstream Backports (Framesync Timeout, ETag/304, WebSocket Commands)
 
 ### Added
