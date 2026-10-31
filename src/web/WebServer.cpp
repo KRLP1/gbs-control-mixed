@@ -180,7 +180,9 @@ void startWebserver()
             }
 
             memset(conf.sta.ssid, 0, sizeof(conf.sta.ssid));
-            strncpy((char*)conf.sta.ssid, ssid.c_str(), sizeof(conf.sta.ssid) - 1);
+            // ssid[32] needs no terminator; a 32 character SSID uses all bytes
+            // (zeroed above, shorter SSIDs stay terminated).
+            strncpy((char*)conf.sta.ssid, ssid.c_str(), sizeof(conf.sta.ssid));
             
             if (pass.length()) {
                 memset(conf.sta.password, 0, sizeof(conf.sta.password));

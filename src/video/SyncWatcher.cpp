@@ -1099,10 +1099,10 @@ void runSyncWatcher()
 
                 // scanlines
                 if (uopt->wantScanlines) {
+                    // switching scanlines off is done where wantScanlines is cleared
+                    // (serial command '7', OSD scanlines handler) and in the bob path above
                     if (!rto->scanlinesEnabled && !rto->motionAdaptiveDeinterlaceActive && !preventScanlines) {
                         enableScanlines();
-                    } else if (!uopt->wantScanlines && rto->scanlinesEnabled) {
-                        disableScanlines();
                     }
                 }
             }
@@ -1730,8 +1730,6 @@ void runSyncWatcher()
                         if (GBS::IF_LD_RAM_BYPS::read() == 0) { // line doubler on?
                             enableScanlines();
                         }
-                    } else if (!uopt->wantScanlines && rto->scanlinesEnabled) {
-                        disableScanlines();
                     }
                 }
             }

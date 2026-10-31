@@ -1,5 +1,41 @@
 # Changelog
 
+## [v1.5.2] – Scanline Clamp + 32-Char SSID + Dead Code Removal
+
+### Fixed
+- `scanlineStrength` clamp at boot (`gbs-control.ino`): upper bound
+  corrected from `0x60` to `0x50`. `0x50` is the highest value
+  representing "scanlines off"; values above are invalid and are now
+  reset to the default `0x30`.
+- `scanlineStrength` clamp on slot restore
+  (`UserCommandHandler.cpp`): the same guard is now applied when
+  loading a preset slot. `slots.bin` is a raw struct dump, so a
+  corrupt or foreign file (e.g. from a different firmware version)
+  could set an invalid value that would otherwise reach the scanline
+  rendering code.
+- 32-character SSID support: `strncpy` no longer truncates 32-
+  character SSIDs to 31 characters. The ESP8266 SDK's
+  `station_config.ssid[32]` does not require a null terminator — a
+  32-character SSID uses all 32 bytes. The struct is zeroed with
+  `memset` before the copy, so shorter SSIDs stay null-terminated.
+  Fixed in both the serial/wifi setup path (`UserCommandHandler.cpp`)
+  and the web form path (`WebServer.cpp`).
+
+### Changed
+- Removed dead `preset` member and unreachable per-preset zoom switch
+  in `OSDManager.h`. The `preset` field was never set anywhere in the
+  codebase, so the switch in `resetPosition()` always fell through to
+  the default case. Replaced with fixed constants (`OSD_ZOOM_5X` /
+  `OSD_ZOOM_4X`, the values the default branch already produced). No
+  behavioral change.
+- Removed unreachable `else if (!uopt->wantScanlines &&
+  rto->scanlinesEnabled)` branches in `SyncWatcher.cpp` (two
+  locations). These branches were inside `if (uopt->wantScanlines)`
+  blocks, so the `!uopt->wantScanlines` condition could never be
+  true. Switching scanlines off is already handled at the points
+  where `wantScanlines` is cleared (serial command '7', OSD scanline
+  handler). No behavioral change.
+
 ## [v1.5.1] – OSD Centering, Scanlines/Line Filter Icons, Icon Name on OLED
 
 ### Added

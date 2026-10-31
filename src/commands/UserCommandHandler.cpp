@@ -458,7 +458,9 @@ void handleType2Command(char argument)
                 // which only update RAM), so the credentials survive the restart below.
                 struct station_config wifiConf;
                 memset(&wifiConf, 0, sizeof(wifiConf));
-                strncpy(reinterpret_cast<char *>(wifiConf.ssid), pendingWifiSSID.c_str(), sizeof(wifiConf.ssid) - 1);
+                // ssid[32] needs no terminator in the SDK; a 32 character SSID uses all bytes
+                // (the struct is zeroed above, shorter SSIDs stay terminated)
+                strncpy(reinterpret_cast<char *>(wifiConf.ssid), pendingWifiSSID.c_str(), sizeof(wifiConf.ssid));
                 strncpy(reinterpret_cast<char *>(wifiConf.password), pendingWifiPassword.c_str(), sizeof(wifiConf.password) - 1);
                 wifi_set_opmode(STATION_MODE);
                 wifi_station_set_config(&wifiConf);
@@ -735,6 +737,10 @@ void handleType2Command(char argument)
                         saveUserPrefs();
 
                         uopt->scanlineStrength = slots.slot[currentSlot].scanlinesStrength;
+                        // same guard as the boot path in gbs-control.ino: slots.bin is a raw
+                        // struct dump, a corrupt or foreign file must not set an invalid value
+                        if (uopt->scanlineStrength > 0x50) // 0x50 = scanlines off is the highest value
+                            uopt->scanlineStrength = 0x30;
                         uopt->wantVdsLineFilter = slots.slot[currentSlot].wantVdsLineFilter;
                         uopt->wantStepResponse = slots.slot[currentSlot].wantStepResponse;
                         uopt->wantPeaking = slots.slot[currentSlot].wantPeaking;

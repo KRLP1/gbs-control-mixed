@@ -148,7 +148,6 @@ public:
     // Horizontal OSD center in display-window units; 0 = center of VDS_DIS_HB.
     // Set by applyWindowbox960(), only used while the windowbox preset is active.
     int16_t centerOverride = 0;
-    uint8_t preset = 0; // wird aktuell nirgends gesetzt -> resetPosition() nimmt immer den default-Zoom
     void registerIcon(OSDIcon icon, OSDHanlder handler)
     {
         this->handlers[(uint8_t)icon] = handler;
@@ -205,20 +204,10 @@ public:
     {
         auto y_stop = GBS::VDS_DIS_VB_ST::read();
 
-        auto x_zoom = GBS::OSD_ZOOM_5X;
-        auto y_zoom = GBS::OSD_ZOOM_4X;
-        switch (this->preset) {
-            case 1: // 480p
-                x_zoom = GBS::OSD_ZOOM_7X;
-                y_zoom = GBS::OSD_ZOOM_2X;
-                break;
-            case 5: // 1080p
-                x_zoom = GBS::OSD_ZOOM_3X;
-                y_zoom = GBS::OSD_ZOOM_8X;
-                break;
-            default:
-                break;
-        }
+        // Fixed zoom for all resolutions (5x horizontal, 4x vertical). A per-preset
+        // zoom table used to be here but was never reachable (nothing set `preset`).
+        const uint8_t x_zoom = GBS::OSD_ZOOM_5X;
+        const uint8_t y_zoom = GBS::OSD_ZOOM_4X;
         // The zoom registers hold (factor - 1): value 4 means 5x (TV5725 programming
         // guide, chapter 7.4). Use the real factor for the size of the menu.
         this->horiZoom = x_zoom;
