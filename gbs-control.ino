@@ -199,9 +199,13 @@ void applyWindowbox960(uint8_t videoMode)
 
         // 4:3 via sampling density, with PLL reset sequence.
         // Picture width is proportional to MD (2373: 49.5 cm, 2249: 47.0 cm).
-        // 2249 is the lowest working value (field-measured: 2248 and below break
-        // up, cause not determined; IF_HSYNC_RST = MD/2 is 1124 for both 2248 and
-        // 2249 due to integer division, equal to IF_HB_ST2, i.e. no buffer left).
+        // The IF line is (MD + 1) / 2 units long; IF_HSYNC_RST = MD / 2 hides the
+        // half unit for even MD. The active window IF_HB_ST2 + 1 (stock: 1125)
+        // must fit into the line, i.e. IF_HB_ST2 + 1 <= (MD + 1) / 2, which gives
+        // MD >= 2249. Field-verified (2026-10-31): 2250 and 2252 work, 2248 breaks
+        // up (vertical roll, noise stripe) but works with IF_HB_ST2 = 1123, and
+        // 2246 works with 1122. Below 2249 IF_HB_ST2 must be lowered together with
+        // MD (not tested below 2246).
         {
             uint16_t targetMD = 2249;
             GBS::PLLAD_MD::write(targetMD);
