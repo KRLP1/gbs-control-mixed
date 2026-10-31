@@ -191,6 +191,11 @@ void applyWindowbox960(uint8_t videoMode)
         GBS::VDS_HB_ST::write(1258);
         GBS::VDS_DIS_HB_SP::write(327);
         GBS::VDS_DIS_HB_ST::write(1258);
+        // DIS_HB 327..1258 is a crop mask, its center (792) is not the picture
+        // center. Center the OSD on the center of the stock 1080p window
+        // (252..1258 -> 755) instead; field-measured: the OSD sat ~2 cm too far
+        // right when centered on the mask.
+        osdManager.centerOverride = 752;
 
         // 4:3 via sampling density, with PLL reset sequence.
         // Picture width is proportional to MD (2373: 49.5 cm, 2249: 47.0 cm).
@@ -237,6 +242,7 @@ void applyWindowbox960(uint8_t videoMode)
         GBS::VDS_HB_SP::write(242);
         GBS::VDS_HB_ST::write(1294);
         GBS::VDS_DIS_HB_SP::write(360);
+        osdManager.centerOverride = 0; // OSD centered on DIS_HB (not field-checked)
         // Display window end: with 1294 the last tile column on the right was
         // masked off. 1328 is the field-measured maximum (1329 and up shows
         // interference pixels on the right); 1326 keeps a small margin.

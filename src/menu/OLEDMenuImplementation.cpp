@@ -410,7 +410,6 @@ bool osdMenuHanlder(OLEDMenuManager *manager, OLEDMenuItem *, OLEDMenuNav nav, b
 {
     static unsigned long start;
     static long left;
-    char buf[30];
     auto display = manager->getDisplay();
 
     if (isFirstTime) {
@@ -423,7 +422,8 @@ bool osdMenuHanlder(OLEDMenuManager *manager, OLEDMenuItem *, OLEDMenuNav nav, b
         display->setColor(OLEDDISPLAY_COLOR::WHITE);
         display->setFont(ArialMT_Plain_16);
         display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
-        display->drawStringf(OLED_MENU_WIDTH / 2, 16, buf, "OSD (%ds)", left / 1000 + 1);
+        // show the selected OSD icon instead of the remaining time
+        display->drawString(OLED_MENU_WIDTH / 2, 16, osdManager.selectedName());
         display->display();
         if (uopt->reverseRotaryEncoderForOledMenu) {
             // reverse nav back to normal

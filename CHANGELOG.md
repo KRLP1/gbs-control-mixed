@@ -1,5 +1,61 @@
 # Changelog
 
+## [v1.5.1] – OSD Centering, Scanlines/Line Filter Icons, Icon Name on OLED
+
+### Added
+- OSD: the scanlines icon (3rd) and the line filter icon (4th) are
+  registered again (`initOSD()`); they were parked since upstream
+  ("confusing, disabled for now"). Field-tested: both work.
+- OLED: while the OSD is open, the display now shows the name of the
+  selected OSD icon (Helligkeit, Kontrast, Scanlines, Zeilenfilter,
+  Position Y, Position X, Skalierung Y, Skalierung X) instead of the
+  "OSD (n s)" countdown. The 8 s inactivity timeout is unchanged, the
+  OSD just disappears without a visible countdown.
+- OSD: the value bar (shown after selecting an icon) is now centered on
+  its own. It is wider than the icon menu but used the same start
+  position, so it sat far to the right (~1 cm at 1920x1080, ~4 cm
+  before the width fix).
+
+### Fixed
+- OSD menu position (`OSDManager::resetPosition()`): the OSD zoom
+  constants (`OSD_ZOOM_1X`..`OSD_ZOOM_8X`) are register values, where
+  value `n` means a zoom of `(n+1)x`. The position calculation used the
+  raw value as the factor, so the menu was centered with too small a
+  width and sat too far right and too far down. It now uses `(zoom + 1)`.
+- Scanlines OSD handler (`osdScanlines()`), now that it is active again:
+  the mixing registers (`MADPT_Y_MI_OFFSET`, `MADPT_UV_MI_OFFSET`) are
+  written only while scanlines are enabled, like serial command `K`.
+  Before, the handler also wrote `MADPT_Y_MI_OFFSET` while scanlines
+  were off, overwriting the 0x7f that `disableScanlines()` parks there.
+  Selecting "off" now calls `disableScanlines()` directly (like serial
+  command `7`); the SyncWatcher only switches scanlines off in bob mode.
+- `VDS_GLB_NOISE` register definition in `tv5725.h`: bit offset 7 -> 0
+  (`S3_51[7:0] + S3_52[2:0]`) according to the register definition
+  document. The register is not used in the firmware, so no functional
+  effect.
+
+### Changed
+- OSD centering uses measured element widths at 1x zoom: icon menu 136
+  (programming guide: 131), value bar 162 (guide: 13 + 2 + 128 plus a
+  gap). `centeredHoriStart()` clamps the start value to 0..255 instead
+  of letting it wrap when an element is wider than the window.
+- 960p windowbox PAL: the OSD is centered on 752 instead of the center
+  of `VDS_DIS_HB` (327..1258 -> 792). In the windowbox `VDS_DIS_HB` is a
+  one-sided crop mask, so its center is not the picture center; the OSD
+  sat ~2 cm too far right. 752 is roughly the center of the stock 1080p
+  window (252..1258). NTSC windowbox and all other modes are unchanged
+  (field-checked: centered).
+
+### Notes
+- The OSD position was measured on the reference display (Loewe, 1920x1080
+  and 960p windowbox PAL/NTSC). The start register moves in steps of 8
+  pixels, so a residual offset of up to ~0.5 cm is normal. If it does
+  not fit your display, `MENU_WIDTH` and `BAR_WIDTH` (`OSDManager.h`) and
+  `centerOverride` (`applyWindowbox960()`) are the values to tune.
+- The vertical OSD position sits ~25 lines closer to the bottom edge than
+  the formula predicts; the cause was not determined. The OSD always
+  overlays the picture and may cover HUD elements at the bottom.
+
 ## [v1.5.0] – 960p Windowbox Calibration Refinements
 
 ### Added

@@ -1,7 +1,13 @@
 #ifndef OSD_MANAGER_H_
 #define OSD_MANAGER_H_
 #include "../gbs/tv5725.h"
-#define MENU_WIDTH 131
+// Size of the OSD elements at 1x zoom, in OSD pixels. The programming guide
+// (chapter 7) gives 131 x 19 for the icon menu and 13 + 2 + <bar length> for the
+// value bar (icon + bar). On the reference display (1920x1080) the icon menu
+// measured ~136 and the value bar (icon, gap, bar of length 128) ~162, so these
+// two widths are the measured values. They are only used to center the elements.
+#define MENU_WIDTH 136
+#define BAR_WIDTH 162
 #define MENU_HEIGHT 19
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) > (b) ? (b) : (a))
@@ -75,6 +81,7 @@ private:
         SUB,
     };
     uint8_t cursor = 0; // Initializer statt auf BSS-Nullung zu vertrauen
+    uint8_t horiZoom = GBS::OSD_ZOOM_5X; // zoom register value in use, set by resetPosition()
     OSDHanlder handlers[8];
     OSDState state = OSDState::OFF;
     void rstOn()
@@ -103,11 +110,44 @@ private:
         return iconToRegValue((OSDIcon)(icon));
     }
 
+    // Horizontal start register value that centers an element of the given width
+    // (in OSD pixels at 1x zoom) in the active display window. The register
+    // counts in steps of 8 pixels (programming guide, S0_95).
+    uint8_t centeredHoriStart(uint16_t widthAt1x)
+    {
+        int16_t x_start = GBS::VDS_DIS_HB_SP::read();
+        int16_t x_stop = GBS::VDS_DIS_HB_ST::read();
+        int16_t center = x_start + (x_stop - x_start) / 2;
+        // 960p windowbox (preset ID 0x07): the display window is a one-sided crop
+        // mask and not centered on the picture, so use the explicit center.
+        if (centerOverride != 0 && GBS::GBS_PRESET_ID::read() == 0x07) {
+            center = centerOverride;
+        }
+        int16_t x = (center - ((horiZoom + 1) * widthAt1x) / 2) >> 3;
+        if (x < 0) {
+            x = 0; // element wider than the window: stay at the left edge
+        } else if (x > 255) {
+            x = 255;
+        }
+        return (uint8_t)x;
+    }
+
 public:
     OSDManager()
     {
         memset(&this->handlers, 0, sizeof(this->handlers));
     }
+    // Name of the icon the cursor is on (shown on the OLED while the OSD is open)
+    const char *selectedName() const
+    {
+        static const char *const names[8] = {
+            "Helligkeit", "Kontrast", "Scanlines", "Zeilenfilter",
+            "Position Y", "Position X", "Skalierung Y", "Skalierung X"};
+        return names[cursor & 7];
+    }
+    // Horizontal OSD center in display-window units; 0 = center of VDS_DIS_HB.
+    // Set by applyWindowbox960(), only used while the windowbox preset is active.
+    int16_t centerOverride = 0;
     uint8_t preset = 0; // wird aktuell nirgends gesetzt -> resetPosition() nimmt immer den default-Zoom
     void registerIcon(OSDIcon icon, OSDHanlder handler)
     {
@@ -163,10 +203,7 @@ public:
     }
     void resetPosition()
     {
-        auto x_start = GBS::VDS_DIS_HB_SP::read();
-        auto x_stop = GBS::VDS_DIS_HB_ST::read();
         auto y_stop = GBS::VDS_DIS_VB_ST::read();
-        auto width = x_stop - x_start;
 
         auto x_zoom = GBS::OSD_ZOOM_5X;
         auto y_zoom = GBS::OSD_ZOOM_4X;
@@ -182,8 +219,11 @@ public:
             default:
                 break;
         }
-        uint8_t x = (x_start + width / 2 - (x_zoom * MENU_WIDTH) / 2) >> 3;
-        uint8_t y = (y_stop - 64 - y_zoom * MENU_HEIGHT) >> 3;
+        // The zoom registers hold (factor - 1): value 4 means 5x (TV5725 programming
+        // guide, chapter 7.4). Use the real factor for the size of the menu.
+        this->horiZoom = x_zoom;
+        uint8_t x = centeredHoriStart(MENU_WIDTH);
+        uint8_t y = (y_stop - 64 - (y_zoom + 1) * MENU_HEIGHT) >> 3;
 
         GBS::OSD_MENU_DISP_STYLE::write(1);
         GBS::OSD_MENU_HORI_START::write(x);
@@ -252,6 +292,8 @@ public:
             state = OSDState::SUB;
             uint8_t active = 128.0 / config.barLength * config.barActiveLength;
             GBS::OSD_MENU_MOD_SEL::write(iconToRegValue(cursor));
+            // the value bar is wider than the icon menu: center it on its own
+            GBS::OSD_MENU_HORI_START::write(centeredHoriStart(BAR_WIDTH));
             GBS::OSD_BAR_LENGTH::write(128);
             GBS::OSD_BAR_FOREGROUND_VALUE::write(active);
             GBS::OSD_MENU_BAR_FONT_FORCOR::write(OSD_WHITE);

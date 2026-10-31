@@ -1,6 +1,8 @@
 #include "OSDManager.h"
 #include "../core/options.h"
+#include "../video/Scanlines.h"
 extern userOptions *uopt;
+extern runTimeOptions *rto;
 extern void saveUserPrefs();
 extern void shiftHorizontalRight();
 extern void shiftHorizontalLeft();
@@ -38,10 +40,19 @@ bool osdScanlines(OSDMenuConfig &config)
         }
         if (uopt->scanlineStrength == 0x50) {
             uopt->wantScanlines = 0;
+            // like serial command '7': the SyncWatcher only switches
+            // scanlines off in bob mode, so switch them off here directly
+            disableScanlines();
         } else {
-            uopt->wantScanlines = 1;
+            uopt->wantScanlines = 1; // the SyncWatcher enables them
         }
-        GBS::MADPT_Y_MI_OFFSET::write(uopt->scanlineStrength);
+        // like serial command 'K': touch the mixing registers only while
+        // scanlines are active. disableScanlines() parks MADPT_Y_MI_OFFSET at
+        // 0x7f (mixing off); overwriting it would alter the picture.
+        if (rto->scanlinesEnabled) {
+            GBS::MADPT_Y_MI_OFFSET::write(uopt->scanlineStrength);
+            GBS::MADPT_UV_MI_OFFSET::write(uopt->scanlineStrength);
+        }
         saveUserPrefs();
     }
     config.barLength = 128;
@@ -164,11 +175,8 @@ void initOSD()
     osdManager.registerIcon(OSDIcon::BRIGHTNESS, osdBrightness);
     osdManager.registerIcon(OSDIcon::CONTRAST, osdContrast);
 
-    // Bewusst geparkt (Upstream: "confusing, disabled for now"): die Handler
-    // bleiben erhalten, falls die Icon-Belegung spaeter geklaert wird.
-    // osdManager.registerIcon(OSDIcon::HUE, osdScanlines);
-    // osdManager.registerIcon(OSDIcon::VOLUME, osdLineFilter);
-
+    osdManager.registerIcon(OSDIcon::HUE, osdScanlines);
+    osdManager.registerIcon(OSDIcon::VOLUME, osdLineFilter);
     osdManager.registerIcon(OSDIcon::MOVE_Y, osdMoveY);
     osdManager.registerIcon(OSDIcon::MOVE_X, osdMoveX);
     osdManager.registerIcon(OSDIcon::SCALE_Y, osdScaleY);

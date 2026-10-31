@@ -471,7 +471,7 @@ public:
     typedef UReg<0x03, 0x50, 6, 1> VDS_DO_UVSEL_FLIP;
     typedef UReg<0x03, 0x50, 7, 1> VDS_DO_16B_EN;
 
-    typedef UReg<0x03, 0x51, 7, 11> VDS_GLB_NOISE;
+    typedef UReg<0x03, 0x51, 0, 11> VDS_GLB_NOISE; // S3_51[7:0] + S3_52[2:0] (register definition v1.1)
     typedef UReg<0x03, 0x52, 4, 1> VDS_NR_Y_BYPS;
     typedef UReg<0x03, 0x52, 5, 1> VDS_NR_C_BYPS;
     typedef UReg<0x03, 0x52, 6, 1> VDS_NR_DIF_LPF5_BYPS;
