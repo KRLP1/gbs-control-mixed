@@ -1,5 +1,108 @@
 # Changelog
 
+## [v1.6.0] – MD Plausibility Watchdog (Stuck-MD Auto-Recovery)
+
+### Added
+- MD plausibility watchdog for video modes 1..4 in `runSyncWatcher()`
+  (`SyncWatcher.cpp`). After an SD/EDTV format switch the mode detect
+  unit (MD) can get stuck: HSync stays active, so the HSACT-based sync
+  loss detection never fires, while MD names either the old mode or no
+  mode at all and the sync processor measures garbage (e.g. vt:97
+  instead of 310, h:214 instead of 431). The format-change branch
+  needs a differently named mode and the recovery machinery needs a
+  sync loss, so nothing intervened. Over a second or two the
+  measurement chain decayed completely (VTOTAL→0, HTOTAL<100), and
+  only power cycling restored the picture. Observed on hardware with
+  Wii, PlayStation 1, Sega Saturn, and SNES.
+
+  The watchdog reads `STATUS_SYNC_PROC_VTOTAL` and checks the line
+  count against non-overlapping bands for the four SD/EDTV mode
+  families (NTSC 480i/240p: 220–288, PAL 576i/288p: 292–352, 480p:
+  495–552, 576p: 595–655; below 200 is garbage). Only acts on a
+  reading that is provably wrong for the loaded mode.
+
+  Escalation in two stages:
+  - Stage 1 (twice): `resetSyncProcessor` + `resetModeDetect` with
+    settle delays, detection-friendly SP parameters, and a double
+    pulse of the MD VS flip (`nudgeMD`). Only runs when MD is
+    actively naming the loaded mode (measurement chain confused
+    around a correctly loaded source).
+  - Stage 2: full re-detection (`setResetParameters` +
+    `prepareSyncProcessor` + `resetSyncProcessor` + `resetModeDetect`
+    + `inputAndSyncDetect()`), i.e. the same teardown the RGB/HV
+    branch uses. This is what power cycling does.
+
+  Fast path: when MD names no mode (or, one attempt per episode,
+  keeps misconfirming the loaded preset) and a stable reading keeps
+  landing in one other mode family's band, after 8 stable passes the
+  watchdog applies that family's preset directly (mirroring the
+  format-change branch) instead of striking and re-detecting from
+  scratch. At most one fast switch per 3 seconds; a wrong guess falls
+  through to the normal escalation.
+
+  Blackout: from 8 stable implausible (or dead) passes on, the DAC is
+  blanked so the strike count, reset rounds, and re-detection all run
+  behind clean black instead of unsynced garbage. Re-enabled by the
+  existing output-on paths (end of `doPostPresetLoadSteps()` behind
+  every preset application, the "stable again" branch) plus a new
+  plausible-reading re-enable that returns the picture as soon as a
+  stage-1 repair measures the loaded mode again. A `mdBlackoutOwned`
+  flag keeps the source-gone handling and the watchdog from fighting
+  over the DAC: only the handler that blanked the output may switch
+  it back on.
+
+  Give-up: after three stage-2 teardowns without improvement, the
+  watchdog stays quiet for 10 minutes instead of fighting a source it
+  cannot fix.
+
+  Safeguards (stability of working sources is the priority):
+  - Only while HS is stably active and no genuine sync loss is pending
+  - Only when MD confirms the loaded mode or names no mode (a
+    differently named mode belongs to the format-change branch)
+  - Line count must be stable over 4 reads (±3); a jumping reading is
+    skipped (neither counts nor clears)
+  - 25 stable implausible passes before every strike action
+    (`runSyncWatcher()` runs at most every 20 ms, so ≥0.5 s)
+  - Any plausible reading clears the whole episode
+  - A change of the loaded mode (new source, preset selection)
+    restarts the watchdog from scratch
+  - In normal operation the check is one register read per pass; the
+    confirmation reads (with their delays) only happen for a reading
+    that already looks wrong
+
+- CRTC timing hold dead-vertical escape hatch (`SyncWatcher.cpp`).
+  The existing CRTC hold (Block 1, for sources like Amstrad CPC PAL
+  whose long lines overflow the chip's 12-bit HTOTAL register) had a
+  blind spot: a stuck-MD episode looks exactly like a CRTC anomaly
+  (mode 0, HS active, HTOTAL decaying below 100). Two escape hatches
+  were added so the hold can no longer swallow a dying measurement
+  chain:
+  1. The hold only stays latched while a vertical is being measured.
+     A held anomaly whose vertical goes dead (`VTOTAL=0` persisting
+     for 25 passes ≈ 0.5 s) is dropped, and the source handed to the
+     MD watchdog below. A genuine CRTC anomaly keeps its vertical, so
+     it keeps holding.
+  2. An MD watchdog episode that has already acted (stage-1 resets
+     done) means the measurement chain is known-bad; such a state is
+     never held. A new `mdEpisodeHot` flag tracks this.
+
+### Fixed
+- OLED firmware-update menu: the "Aktuell!" (up-to-date) result state
+  previously drew both "Aktuell!" centered and the firmware version
+  string at y=36, which overlapped because both landed at roughly the
+  same height on the small OLED. The second draw (including its font
+  and alignment setup) is now removed; the version is already shown
+  in the menu itself. (`OLEDMenuImplementation.cpp`)
+
+### Changed
+- The "stable again" branch in `runSyncWatcher()` no longer re-
+  enables the DAC output while an MD watchdog episode is active (it
+  checks `mdImplausibleCounter < MD_BLACKOUT_PASSES && mdDeadCounter
+  < MD_BLACKOUT_PASSES && mdStuckResetRounds == 0` first). This
+  prevents a counter reset (from a sync blip or format-change
+  counting) from flashing garbage back on behind the watchdog's back
+  during the misconfirm case where MD keeps naming the loaded mode.
+
 ## [v1.5.2] – Scanline Clamp + 32-Char SSID + Dead Code Removal
 
 ### Fixed

@@ -559,11 +559,9 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
             
         case STATE_SHOW_RESULT:
             if (updateStatus == FirmwareUpdater::UP_TO_DATE) {
+                // The version is already shown in the menu; a second line here
+                // overlapped the text (both were drawn at about the same height).
                 display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Aktuell!");
-                extern const char* FIRMWARE_VERSION;
-                display->setFont(ArialMT_Plain_10);
-                display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
-                display->drawString(OLED_MENU_WIDTH / 2, 36, FIRMWARE_VERSION);
             } else if (updateStatus == FirmwareUpdater::WIFI_NOT_CONNECTED) {
                 display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "WLAN getrennt");
             } else {

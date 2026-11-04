@@ -265,6 +265,76 @@ void calibrateAdcOffset()
     GBS::ADC_BOFCTRL::write(adco->b_off);
 }
 
+// --- MD plausibility watchdog: line count helpers ----------------------------------
+// STATUS_SYNC_PROC_VTOTAL ("vt:" in the info line) as measured by the sync processor. Interlaced
+// SD modes measure one field (about 262 NTSC, about 310 PAL), progressive EDTV modes a whole
+// frame (about 524 for 480p, about 624 for 576p). A measurement chain that lost its reference
+// reads far below all of these (vt:97..155 observed in the stuck state).
+//
+// The watchdog only acts on a reading that is provably wrong for the loaded mode:
+//   * it lies in the band of a *different* mode family (the bands below do not overlap), or
+//   * it is far below anything a real SD/EDTV source produces (garbage measured by a sync
+//     processor that lost its reference).
+// A reading outside every band but above the garbage limit (24 kHz and other unusual sources)
+// is never acted on, so such sources keep behaving exactly as they did without the watchdog.
+static const uint16_t MD_WATCHDOG_GARBAGE_BELOW = 200;
+
+// Stable passes in one foreign mode family before the watchdog fast path applies that
+// family's preset directly (while MD names no mode, or - one attempt per episode - while MD
+// keeps misconfirming the loaded preset; see the fast path block below). 8 passes at the
+// ~20ms syncwatcher rate is ~160ms, far below the 25-pass strike threshold, justified
+// because the reading must not only be stable but land in a *known* band on every pass.
+static const uint8_t MD_FAST_FORMAT_PASSES = 8;
+
+// Implausible (or dead) passes after which the watchdog blanks the DAC output. A stuck-MD
+// episode would otherwise push unsynced garbage through its whole detection and escalation
+// window: with MD latched, the HSACT based sync loss detection never fires and nothing else
+// stops the DAC. Blanking at the same pass count the fast path needs hides the entire
+// watchdog transition behind clean black.
+// The output comes back through the paths that already exist - doPostPresetLoadSteps()
+// enables the DAC at its end (every preset application), the "stable again" branch
+// re-enables what the source-gone handling blanked - plus one new one: a plausible reading
+// (episode repaired in place) re-enables it directly, but only when this watchdog itself
+// blanked it (see mdBlackoutOwned). Only the DAC is touched; sync out keeps running, so the
+// display stays locked showing black instead of dropping to standby and back. (The longer
+// source-gone blank also stops sync out - that is a different situation, it wants the
+// display to power down.)
+// 8 passes never trips on the 1-3 transient implausible passes a healthy format switch
+// produces while the SP locks onto the new source (development logs showed a correct vt
+// from the first pass after a preset load).
+static const uint8_t MD_BLACKOUT_PASSES = 8;
+
+// 0 = outside every band (HD modes etc. are not covered by this watchdog)
+static uint8_t spLineCountFamily(uint16_t lineCount)
+{
+    if (lineCount >= 220 && lineCount <= 288) {
+        return 1; // NTSC 480i / 240p
+    }
+    if (lineCount >= 292 && lineCount <= 352) {
+        return 2; // PAL 576i / 288p
+    }
+    if (lineCount >= 495 && lineCount <= 552) {
+        return 3; // 480p / EDTV 60
+    }
+    if (lineCount >= 595 && lineCount <= 655) {
+        return 4; // 576p / EDTV 50
+    }
+    return 0;
+}
+
+// lineCount 0 is the sync processor's reset state and carries no information
+static boolean spLineCountImplausibleForMode(uint8_t mode, uint16_t lineCount)
+{
+    if (lineCount == 0) {
+        return false;
+    }
+    if (lineCount < MD_WATCHDOG_GARBAGE_BELOW) {
+        return true;
+    }
+    uint8_t family = spLineCountFamily(lineCount);
+    return family != 0 && family != mode;
+}
+
 void runSyncWatcher()
 {
     if (!rto->boardHasPower) {
@@ -275,8 +345,7 @@ void runSyncWatcher()
     static uint16_t activeStableLineCount = 0;
     static unsigned long lastSyncDrop = millis();
     static unsigned long lastLineCountMeasure = millis();
-    // Backported from JuergenLeber/gbs-control: counts consecutive "no signal" probes that find
-    // the source completely inactive.
+    // counts consecutive "no signal" probes that find the source completely inactive
     static uint8_t sourceGoneProbeCount = 0;
     // set once the MD unit has named a mode for the source that is currently attached, cleared by
     // the teardown below. Tells a source that never classified apart from one that classified
@@ -287,9 +356,40 @@ void runSyncWatcher()
     // reclassifies the source, and so the teardown can clear it for the next one.
     static uint8_t modeUnknownCounter = 0;
     static boolean crtcTimingHold = false;
-    // Backported from JuergenLeber/gbs-control: one shot guard for the fallback preset used on a
-    // source the MD unit has no profile for at all (see noSyncCounter == 38 below).
+    // one shot guard for the fallback preset used on a source the MD unit has no
+    // profile for at all (see the fallback preset at noSyncCounter >= 200 below)
     static boolean fallbackPresetTried = false;
+    // MD plausibility watchdog state (the block further down explains what these do). At
+    // function scope, not block scope: Block 1 - the CRTC timing hold, which runs earlier
+    // in every pass - needs to see whether a watchdog episode has already acted before it
+    // decides to hold a mode-0 source.
+    static uint8_t mdImplausibleCounter = 0;
+    static uint8_t mdDeadCounter = 0; // consecutive passes with a dead vertical (vt 0)
+    static uint8_t mdStuckResetRounds = 0;
+    static uint8_t mdStuckTeardowns = 0;
+    static unsigned long mdStuckQuietStart = 0;
+    static uint32_t mdStuckQuietLen = 0;
+    static uint8_t mdWatchedMode = 0;
+    // fast path state - which foreign family a stuck-MD reading keeps landing in, how
+    // many stable passes in a row it has been that family, and when the fast path last
+    // applied a preset (ping-pong guard: at most one fast switch per 3 seconds).
+    static uint8_t mdForeignFamily = 0;
+    static uint8_t mdForeignStreak = 0;
+    static unsigned long mdFastPathLastApply = 0;
+    // one-shot latch for the misconfirm variant of the fast path. When MD actively keeps
+    // naming the loaded (wrong) preset, a fast switch can fight the format change branch:
+    // MD still names the old mode afterwards, the format change branch reloads it, and the
+    // watchdog would measure the foreign family again. One attempt per episode; if it does
+    // not stick, the strike escalation takes over. Cleared only by a plausible reading, a
+    // stage-2 teardown or a lost source - NOT by a loaded-mode change, because that is
+    // what the ping-pong produces.
+    static uint8_t mdFastPathMisconfirmUsed = 0;
+    // set while the MD watchdog itself holds the DAC dark (it wrote the 0). Only then may
+    // the watchdog switch the output back on by itself - a DAC that the "source gone"
+    // handling blanked belongs to that handling and its "stable again" re-enable.
+    static boolean mdBlackoutOwned = false;
+    // consecutive dead-vertical passes while the CRTC hold is latched
+    static uint8_t crtcHoldVdeadCounter = 0;
 
     uint16_t thisStableLineCount = 0;
     uint8_t detectedVideoMode = getVideoMode();
@@ -439,33 +539,31 @@ void runSyncWatcher()
         genuineSyncLoss = rawSyncLoss;
     }
 
-    // --- Backported from JuergenLeber/gbs-control, as an ADDITIVE safeguard only. ---
-    // Kwakx keeps deciding csync vs. discrete sync via GBS::SP_SOG_MODE (see the format-change
-    // branch below and GBSSync.cpp) - that is left untouched. The two blocks below only add extra
-    // handling for cases where that register-based classification alone is not enough, before
-    // falling through to the noSyncCounter escalation below (which now runs on this file's own
-    // genuineSyncLoss, debounced above, rather than Leber's raw condition - see that block for why
-    // the csync-SD exemption Leber added there is subsumed by genuineSyncLoss already).
+    // --- Discrete VSync safeguards (additive only) ------------------------------------
+    // csync vs. discrete sync classification stays with GBS::SP_SOG_MODE (the format-change
+    // branch below and GBSSync.cpp). The two blocks below only add handling for cases where
+    // that register-based classification alone is not enough, before falling through to the
+    // noSyncCounter escalation below (which runs on the debounced genuineSyncLoss above, so
+    // brief csync-SD glitches never reach it in the first place).
 
     // Block 2 (checked first - see note below): a source with separate H/V sync that
-    // GBS::SP_SOG_MODE nonetheless classified as csync stays horizontally locked with the picture
-    // rolling and mode never resolving (HV input gated off, vertical free running).
-    // probeDiscreteVSync() can tell the two apart once H has locked, so retry here periodically
-    // once the timing has settled.
+    // GBS::SP_SOG_MODE nonetheless classified as csync stays horizontally locked with the
+    // picture rolling and mode never resolving (HV input gated off, vertical free running).
+    // probeDiscreteVSync() can tell the two apart once H has locked, so retry here
+    // periodically once the timing has settled.
     //
-    // Must run before Block 1 (CRTC timing hold): that block returns early for as long as the
-    // mode reads unknown, and a source misjudged as CSync reads unknown forever - so checked
-    // second, this retry would never get a turn.
+    // Must run before Block 1 (CRTC timing hold): that block returns early for as long as
+    // the mode reads unknown, and a source misjudged as CSync reads unknown forever - so
+    // checked second, this retry would never get a turn.
     //
-    // A source that never classified is retried quickly. One that did and then dropped to mode 0
-    // is usually just glitching - 15kHz CSync sources do that routinely - and probing them is
-    // actively harmful: the probe turns SOG slicing off for a third of a second, which for a
-    // source whose sync only arrives that way is itself a sync dropout. So a previously-classified
-    // source has to hold mode 0 far longer (~30s) before it's worth disturbing. Excluding it
-    // outright, as an earlier version of this safeguard did, leaves no way back at all: an Atari
-    // ST that boots in a colour mode and then switches itself to 71Hz mono - which the MD unit has
-    // no profile for - would latch "classified" for good, with picture rolling and no recovery
-    // short of a full teardown.
+    // A source that never classified is retried quickly (~3s). One that did and then
+    // dropped to mode 0 is usually just glitching - 15kHz CSync sources do that routinely -
+    // and probing them is actively harmful: the probe turns SOG slicing off for a third of
+    // a second, which for a source whose sync only arrives that way is itself a sync
+    // dropout. So a previously-classified source has to hold mode 0 far longer (~30s)
+    // before it's worth disturbing. But not excluded outright, or a source that switches
+    // to a mode the MD unit has no profile for (e.g. Atari ST 71Hz mono) would be stuck
+    // with a rolling picture and no recovery short of a full teardown.
     {
         static uint16_t noModeWithCsyncCounter = 0;
 
@@ -499,23 +597,60 @@ void runSyncWatcher()
         }
     }
 
-    // Block 1: Detect CRTC timing changes (e.g. non-standard horizontal total) that confuse mode
-    // detection while keeping HSACT active - e.g. Amstrad/Schneider CPC PAL, whose long lines
-    // overflow the chip's 12-bit HTOTAL register. MODE then reads 0 while HSync stays active -
-    // left alone, the escalation below would run, apply a wrong preset, and corrupt the picture
-    // for as long as the anomaly lasts.
-    // Guard with htotal: during a normal transient mode=0 (vsync extraction glitch on csync) the
-    // PLLAD stays locked so htotal stays near its expected value; during a real CRTC timing change
-    // the 12-bit register overflows and reads garbage (e.g. 9 for CPC PAL's 3x-longer lines).
-    // Do NOT freeze — by the time we detect the anomaly the frame buffer is already corrupted.
-    // Do NOT funnel into genuineSyncLoss — that triggers noSyncCounter escalation, updateSpDynamic,
-    // and ultimately a wrong preset being applied.
-    // Instead: block all recovery machinery while the anomaly lasts, then on restore trigger a
-    // targeted framesync + phase reset so the GBS re-locks cleanly to the reverted timing.
+    // Block 1: Detect CRTC timing changes (e.g. non-standard horizontal total) that confuse
+    // mode detection while keeping HSACT active - e.g. Amstrad/Schneider CPC PAL, whose
+    // long lines overflow the chip's 12-bit HTOTAL register. MODE then reads 0 while HSync
+    // stays active - left alone, the escalation below would run, apply a wrong preset, and
+    // corrupt the picture for as long as the anomaly lasts.
+    // Guard with htotal: during a normal transient mode=0 (vsync extraction glitch on
+    // csync) the PLLAD stays locked so htotal stays near its expected value; during a real
+    // CRTC timing change the 12-bit register overflows and reads garbage (e.g. 9 for CPC
+    // PAL's 3x-longer lines).
+    // Do NOT freeze - by the time we detect the anomaly the frame buffer is already
+    // corrupted. Do NOT funnel into genuineSyncLoss - that triggers noSyncCounter
+    // escalation, updateSpDynamic, and ultimately a wrong preset being applied.
+    // Instead: block all recovery machinery while the anomaly lasts, then on restore
+    // trigger a targeted framesync + phase reset so the GBS re-locks cleanly to the
+    // reverted timing.
+    // Two escape hatches keep the hold from swallowing a dying measurement chain - a
+    // stuck-MD episode ends up looking exactly like a CRTC anomaly here (mode 0, HS active,
+    // HTOTAL decaying below 100), and the hold's early return would keep the MD watchdog,
+    // which sits further down this function, from ever running its re-detection:
+    //   1. The hold only latches - and only stays latched - while a vertical is being
+    //      measured: a genuine CRTC anomaly keeps counting its lines, a dead chain reads
+    //      VTOTAL 0. A held anomaly whose vertical goes dead is dropped, and the source
+    //      handed to the watchdog below.
+    //   2. An MD watchdog episode that has already ACTED (stage-1 resets done) means the
+    //      measurement chain is known-bad; such a state is never held. Counting passes
+    //      without acting must not count as "acting": a fallback-preset source that can
+    //      never classify (the CPC itself) measures implausibly for the 480p fallback until
+    //      this hold latches at pass 5, long before the watchdog's own 25-pass threshold.
     {
+        boolean mdEpisodeHot = (mdStuckResetRounds != 0); // a watchdog episode has already acted
+
         if (crtcTimingHold) {
             if (!genuineSyncLoss && detectedVideoMode == 0) {
-                return; // mode still unknown: skip all recovery machinery
+                // a held anomaly that stops measuring a vertical is not an anomaly - the
+                // chain died while holding. Drop the hold and hand the source to the
+                // watchdog below instead of holding a dead state forever. A genuine CRTC
+                // anomaly keeps its vertical, so it keeps holding.
+                if (GBS::STATUS_SYNC_PROC_VTOTAL::read() == 0) {
+                    if (crtcHoldVdeadCounter < 255) {
+                        crtcHoldVdeadCounter++;
+                    }
+                    if (crtcHoldVdeadCounter >= 25) { // ~0.5s of dead vertical is not a glitch
+                        crtcHoldVdeadCounter = 0;
+                        crtcTimingHold = false;
+                        modeUnknownCounter = 0;
+                        SerialM.println(F("CRTC hold dropped: vertical gone dead, MD watchdog takes over"));
+                        // deliberately no return: the pass continues into the watchdog below
+                    }
+                } else {
+                    crtcHoldVdeadCounter = 0;
+                }
+                if (crtcTimingHold) {
+                    return; // mode still unknown: skip all recovery machinery
+                }
             }
             // Mode returned to a valid value (or genuine sync loss) — fall through to normal handling
             crtcTimingHold = false;
@@ -530,11 +665,23 @@ void runSyncWatcher()
         if (!genuineSyncLoss && !crtcTimingHold && detectedVideoMode == 0 &&
             rto->videoStandardInput > 0 && rto->videoStandardInput < 14 &&
             GBS::STATUS_SYNC_PROC_HTOTAL::read() < 100) {
-            if (++modeUnknownCounter >= 5) {
-                SerialM.println(F("\nmode unknown while sync active (CRTC timing change?)"));
-                crtcTimingHold = true;
-                modeUnknownCounter = 0;
-                return; // skip recovery machinery for this iteration
+            if (modeUnknownCounter < 255) {
+                modeUnknownCounter++;
+            }
+            if (modeUnknownCounter == 5) {
+                if (mdEpisodeHot || GBS::STATUS_SYNC_PROC_VTOTAL::read() == 0) {
+                    // not a CRTC anomaly - the watchdog has already acted on this source,
+                    // or nothing is being measured at all. Say so once (the counter
+                    // saturates instead of resetting) and let the pass run on into the
+                    // watchdog below, whose dead handling escalates to the full
+                    // re-detection.
+                    SerialM.println(F("\nmode unknown while sync active, chain looks dead - no CRTC hold"));
+                } else {
+                    SerialM.println(F("\nmode unknown while sync active (CRTC timing change?)"));
+                    crtcTimingHold = true;
+                    modeUnknownCounter = 0;
+                    return; // skip recovery machinery for this iteration
+                }
             }
         } else if (!crtcTimingHold) {
             modeUnknownCounter = 0;
@@ -622,19 +769,16 @@ void runSyncWatcher()
             nudgeMD();
         }
 
-        // Backported from JuergenLeber/gbs-control. HSync is solidly present but no video mode was
-        // ever recognised. Nothing has applied a preset, so the PLL never locks, and that's a dead
-        // end in both directions: the format-change branch needs a detected mode before it runs,
-        // and probeDiscreteVSync() needs H lock before it can answer. Left alone the source stays
-        // here indefinitely. Load the fallback preset once to establish lock and let the normal
-        // machinery continue. Reached by anything the MD unit has no profile for, e.g. Atari ST
-        // high res at 35.7kHz.
-        // 200, not the round 300 the rest of this scale might suggest: Block 2 further up (the
-        // discrete VSync retry) is the last thing that can still make the MD unit name this source
-        // - it resets the sync processor and the mode detect unit and re-optimizes the SOG level.
-        // Sitting out another 100 passes after that has had a full second to bear fruit only adds
-        // to the time the screen stays dark. Firing early is cheap even when it's wrong: the
-        // format-change branch replaces the fallback preset as soon as a real mode does turn up.
+        // HSync is solidly present but no video mode was ever recognised. Nothing has
+        // applied a preset, so the PLL never locks, and that's a dead end in both
+        // directions: the format-change branch needs a detected mode before it runs, and
+        // probeDiscreteVSync() needs H lock before it can answer. Load the fallback preset
+        // once to establish lock and let the normal machinery continue. Reached by anything
+        // the MD unit has no profile for, e.g. Atari ST high res at 35.7kHz.
+        // 200, not a round 300: the discrete VSync retry above is the last thing that can
+        // still make the MD unit name this source, and it has had a full second by then.
+        // Firing early is cheap even when it's wrong: the format-change branch replaces the
+        // fallback preset as soon as a real mode does turn up.
         if (rto->noSyncCounter >= 200 && !fallbackPresetTried && rto->videoStandardInput == 0 &&
             GBS::STATUS_SYNC_PROC_HSACT::read() == 1) {
             fallbackPresetTried = true;
@@ -643,14 +787,14 @@ void runSyncWatcher()
             applyPresets(0); // overrides to 480p60 and re-checks the sync type
             delay(300);
 
-            // The preset has just given the PLL the H lock that probeDiscreteVSync() needs, and
-            // this is the one place that knows a probe is worth taking right now: HSync solid, no
-            // mode, a preset freshly applied, nothing else pending. The sync type applyPresets()
-            // decided a moment ago cannot be trusted - it probed before this preset existed, with
-            // no lock, where the answer can only ever be "none". Asking again here saves the ~3s
-            // the periodic retry above would otherwise spend rediscovering the same thing. A
-            // source that really is CSync answers "none" and loses only the probe's own third of
-            // a second, and the periodic retry still covers the case where the lock needs longer.
+            // The preset has just given the PLL the H lock that probeDiscreteVSync() needs,
+            // and this is the one place that knows a probe is worth taking right now. The
+            // sync type applyPresets() decided a moment ago cannot be trusted - it probed
+            // before this preset existed, with no lock, where the answer can only ever be
+            // "none". Asking again here saves the ~3s the periodic retry above would
+            // otherwise spend; a source that really is CSync answers "none" and loses only
+            // the probe's own third of a second, and the periodic retry still covers the
+            // case where the lock needs longer.
             if (rto->syncTypeCsync && probeDiscreteVSync(NULL)) {
                 SerialM.println(F("fallback preset locked, source has discrete VSync > RGB/HV"));
                 rto->syncTypeCsync = false;
@@ -742,6 +886,11 @@ void runSyncWatcher()
                 sourceGoneProbeCount = 0;
             } else if (sourceGoneProbeCount < 255) {
                 sourceGoneProbeCount++;
+            }
+            if (sourceGoneProbeCount >= 2) {
+                // from here on the dark output belongs to this handling, even if the MD
+                // watchdog blanked it first (see mdBlackoutOwned)
+                mdBlackoutOwned = false;
             }
             if (sourceGoneProbeCount >= 2 && GBS::DAC_RGBS_PWDNZ::read() == 1) {
                 SerialM.println(F("source gone, blanking output"));
@@ -937,10 +1086,20 @@ void runSyncWatcher()
             unfreezeVideo();           // called 2nd time here to make sure
             if (GBS::DAC_RGBS_PWDNZ::read() == 0) {
                 // re-enable whatever the "source gone" handling above blanked, now that the
-                // source is confirmed back and stable.
-                GBS::DAC_RGBS_PWDNZ::write(1); // re-enable output if it was blanked on source loss
-                if (!uopt->wantOutputComponent) {
-                    GBS::PAD_SYNC_OUT_ENZ::write(0); // and sync with it, if that was stopped too
+                // source is confirmed back and stable - but never while an MD watchdog
+                // episode holds the output dark. In the misconfirm case MD keeps naming the
+                // loaded mode, so this very branch counts its stability passes straight
+                // through such an episode, and a counter reset in between (sync blip,
+                // format change counting) would let the == 2 case flash the garbage back
+                // on behind the watchdog's back. The episode re-enables the output itself:
+                // on a plausible reading, or through the preset application every
+                // escalation path ends in.
+                if (mdImplausibleCounter < MD_BLACKOUT_PASSES && mdDeadCounter < MD_BLACKOUT_PASSES &&
+                    mdStuckResetRounds == 0) {
+                    GBS::DAC_RGBS_PWDNZ::write(1); // re-enable output if it was blanked on source loss
+                    if (!uopt->wantOutputComponent) {
+                        GBS::PAD_SYNC_OUT_ENZ::write(0); // and sync with it, if that was stopped too
+                    }
                 }
             }
         }
@@ -1109,6 +1268,358 @@ void runSyncWatcher()
         }
     }
 
+    // --- MD plausibility watchdog for modes 1..4 ---------------------------------------
+    // Failure mode (observed on hardware, Wii): after an SD/EDTV format switch the mode
+    // detect unit (MD) can get stuck. HSync stays active, so the HSACT based sync loss
+    // detection above never fires, while MD names either the old mode or no mode at all and
+    // the sync processor measures garbage (vt:97 instead of 310, h:214 instead of 431). The
+    // format change branch needs a differently named mode and the recovery machinery needs
+    // a sync loss, so nothing intervenes. The stuck state is not even stable: over a second
+    // or two the measurement chain decays completely (st00 VT_OK 1->0, VT_BAD set, all MD
+    // classification bits 0, VTOTAL finally reading 0, HTOTAL falling below 100) - and the
+    // CRTC timing hold further up would happily latch that dead state. Without this
+    // watchdog, only power cycling restored the picture.
+    //
+    // Idea: while sync is stably active with no genuine sync loss, a *stable* line count
+    // that is provably wrong for the loaded mode (see spLineCountImplausibleForMode) means
+    // the measurement chain does not match the source. Repair it, escalating in two stages:
+    //   stage 1 (twice): resetSyncProcessor + resetModeDetect with settle delays - the same
+    //                    sequence the sync loss recovery above uses - plus detection
+    //                    friendly SP parameters and a double pulse of the MD VS flip
+    //                    (nudgeMD, so the flip ends up as it was). A legitimate source is
+    //                    simply re-classified as the same mode.
+    //   stage 2:         full re-detection with setResetParameters + prepareSyncProcessor +
+    //                    resetSyncProcessor + resetModeDetect, i.e. the teardown the RGB/HV
+    //                    branch uses at limitNoSync. inputAndSyncDetect() then brings the
+    //                    source up from scratch, which is what power cycling does.
+    // Safeguards (stability of working sources is the priority):
+    //   * only while HS is stably active and no genuine sync loss is pending
+    //   * only when the MD confirms the loaded mode or names no mode at all - a differently
+    //     named mode belongs to the format change branch above
+    //   * the line count must be provably wrong and stable over 4 reads (+/-3); a jumping
+    //     reading is skipped (neither counts nor clears), a zero reading counts as a dead
+    //     chain once it persists for 25 passes while HS stays stable
+    //   * in normal operation the check is one register read per pass; the confirmation
+    //     reads (with their delays) only happen for a reading that already looks wrong
+    //   * 25 stable implausible passes before every action (runSyncWatcher() runs at most
+    //     every 20 ms, so that takes at least half a second)
+    //   * any plausible reading clears the whole episode; a change of the loaded mode (new
+    //     source, preset selection) restarts the watchdog from scratch
+    //   * after three stage-2 teardowns without improvement it stays quiet for 10 minutes
+    //     instead of fighting a source it cannot fix
+    //
+    // Fast path: with MD naming no mode (or, one attempt per episode, misconfirming the
+    // loaded preset), a reading that is stable AND keeps landing in one other mode family's
+    // band is the SP truthfully describing the new source. After MD_FAST_FORMAT_PASSES
+    // stable passes, apply that family's preset directly - the same sequence the format
+    // change branch runs - instead of striking, resetting and re-detecting from scratch.
+    // At most one fast switch per 3 seconds; a wrong guess simply falls through to the
+    // normal escalation below afterwards.
+    //
+    // Blackout: from MD_BLACKOUT_PASSES stable implausible (or dead) passes on, the DAC is
+    // blanked, so the strike count, the reset rounds and the re-detection all run behind
+    // black instead of unsynced garbage. Re-enabled by the existing output-on paths (the
+    // end of doPostPresetLoadSteps() behind every preset application, and the "stable
+    // again" branch - which never lifts a blackout while an episode is active, see its
+    // exception there) plus the plausible-reading re-enable, which returns the picture as
+    // soon as a stage-1 repair measures the loaded mode again, but only when this watchdog
+    // blanked it (mdBlackoutOwned). The quiet periods (10s breather, 10min give-up) leave
+    // the output as the last action produced it: a working re-detection ends in a preset
+    // application and shows the new picture, a dead one stays dark.
+    {
+        // (the watchdog state variables live at function scope so that Block 1 above can
+        // see whether an episode has already acted - declared next to fallbackPresetTried)
+
+        if (!genuineSyncLoss && rto->videoStandardInput >= 1 && rto->videoStandardInput <= 4) {
+            if (mdWatchedMode != rto->videoStandardInput) {
+                // new loaded mode: judge it fresh
+                mdWatchedMode = rto->videoStandardInput;
+                mdImplausibleCounter = 0;
+                mdDeadCounter = 0;
+                mdStuckResetRounds = 0;
+                mdStuckTeardowns = 0;
+                mdStuckQuietLen = 0;
+                mdForeignFamily = 0;
+                mdForeignStreak = 0;
+            }
+
+            // the blind spot: MD confirms the loaded mode, or names no mode at all
+            boolean mdLatched =
+                (detectedVideoMode == rto->videoStandardInput) || (detectedVideoMode == 0);
+
+            if (!status16SpHsStable || !mdLatched ||
+                ((millis() - mdStuckQuietStart) < mdStuckQuietLen)) {
+                mdImplausibleCounter = 0;
+                mdDeadCounter = 0;
+                mdForeignFamily = 0;
+                mdForeignStreak = 0;
+            } else {
+                uint16_t lineCount = GBS::STATUS_SYNC_PROC_VTOTAL::read();
+
+                boolean strike = false;
+
+                if (lineCount == 0) {
+                    // a dead vertical is not a format hint: it breaks any fast path streak
+                    mdForeignFamily = 0;
+                    mdForeignStreak = 0;
+                    // a single zero reading is still "no information" (the SP sits in
+                    // reset for a moment right after a preset load). But persistent zeros
+                    // with a stable HS - VTOTAL dead while HS stays active - are evidence
+                    // of a dead chain, so count them like an implausible reading; 25 of
+                    // them strike, and the shared escalation does the rest.
+                    if (mdDeadCounter < 255) {
+                        mdDeadCounter++;
+                    }
+                    // a dead chain holds the last captured frame on the DAC - frozen
+                    // garbage. Once the dead state has outlasted any SP reset transient,
+                    // blank the output like the implausible case below does. The write and
+                    // its log happen once; the read() gate stays closed until one of the
+                    // re-enable paths fires.
+                    if (mdDeadCounter >= MD_BLACKOUT_PASSES &&
+                        GBS::DAC_RGBS_PWDNZ::read() == 1) {
+                        SerialM.println(F("MD watchdog: dead chain - blanking output"));
+                        GBS::DAC_RGBS_PWDNZ::write(0);
+                        mdBlackoutOwned = true;
+                    }
+                    if (mdDeadCounter >= 25) {
+                        mdDeadCounter = 0;
+                        strike = true;
+                        SerialM.print(F("\nMD plausibility watchdog: no vertical measured while mode "));
+                        SerialM.print(rto->videoStandardInput);
+                        SerialM.println(F(" is loaded (dead chain)"));
+                    }
+                } else if (!spLineCountImplausibleForMode(rto->videoStandardInput, lineCount)) {
+                    // plausible (or at least not provably wrong): forget the whole episode,
+                    // including the misconfirm latch - the loaded mode measures correctly
+                    // now, so a future misconfirm deserves a fresh attempt.
+                    // A plausible reading is also the earliest point at which a repair paid
+                    // off - stage 1 reset the SP and MD around a correctly loaded source and
+                    // the chain now measures it again. Bring the picture back right here
+                    // instead of waiting for the "stable again" passes - but only when THIS
+                    // watchdog blanked the output (mdBlackoutOwned): a DAC that the
+                    // source-gone handling blanked must stay dark until its "stable again"
+                    // branch has finished the restore (SOG optimisation, unfreeze) -
+                    // switching it on earlier would show the frozen last frame of the
+                    // vanished source. The flag keeps the normal-operation cost at one
+                    // register read per pass. A flag left over from a blackout that a
+                    // preset application ended is harmless: the read finds the DAC on,
+                    // and the flag is dropped.
+                    if (mdBlackoutOwned) {
+                        mdBlackoutOwned = false;
+                        if (GBS::DAC_RGBS_PWDNZ::read() == 0) {
+                            SerialM.println(F("MD watchdog: measurement plausible again - output back on"));
+                            GBS::DAC_RGBS_PWDNZ::write(1);
+                            if (!uopt->wantOutputComponent) {
+                                GBS::PAD_SYNC_OUT_ENZ::write(0);
+                            }
+                        }
+                    }
+                    mdImplausibleCounter = 0;
+                    mdDeadCounter = 0;
+                    mdStuckResetRounds = 0;
+                    mdStuckTeardowns = 0;
+                    mdStuckQuietLen = 0;
+                    mdForeignFamily = 0;
+                    mdForeignStreak = 0;
+                    mdFastPathMisconfirmUsed = 0;
+                } else {
+                    // looks wrong: only a stable reading counts as evidence
+                    boolean stableReading = true;
+                    for (uint8_t i = 0; stableReading && i < 3; i++) {
+                        delay(2);
+                        int16_t again = (int16_t)GBS::STATUS_SYNC_PROC_VTOTAL::read();
+                        if (again < ((int16_t)lineCount - 3) || again > ((int16_t)lineCount + 3)) {
+                            stableReading = false; // jumps around: not evidence
+                        }
+                    }
+
+                    // A reading that jumps around is skipped: it neither counts nor clears. The
+                    // garbage of the stuck state wanders from pass to pass (vt:97..132 in the
+                    // log), so requiring an unbroken run of clean passes would never complete.
+                    if (stableReading) {
+                        if (mdImplausibleCounter < 255) {
+                            mdImplausibleCounter++;
+                        }
+
+                        // the episode now has solid evidence that the loaded preset does
+                        // not fit the source. Blank the output for the rest of the
+                        // transition: the 25-pass strike count, the stage-1 reset rounds
+                        // and - when MD names a foreign family - the fast path switch
+                        // below all run behind black instead of unsynced garbage. For the
+                        // fast path this is the same instant it fires (both count the same
+                        // passes); for the strike paths it pulls the dark forward from the
+                        // strike to ~160ms after the source changed.
+                        if (mdImplausibleCounter >= MD_BLACKOUT_PASSES &&
+                            GBS::DAC_RGBS_PWDNZ::read() == 1) {
+                            SerialM.println(F("MD watchdog: measurement off - blanking output"));
+                            GBS::DAC_RGBS_PWDNZ::write(0);
+                            mdBlackoutOwned = true;
+                        }
+
+                        // fast path bookkeeping. While MD names no mode, a reading that
+                        // keeps landing in the band of one particular other mode family is
+                        // the SP truthfully describing the new source (measured: vt:270/271
+                        // stable for a full second across resets while MD said 0). The same
+                        // evidence counts when MD keeps *misconfirming* the loaded preset -
+                        // same blind spot, same remedy, but at most one attempt per episode
+                        // (ping-pong guard, see the mdFastPathMisconfirmUsed latch).
+                        uint8_t readingFamily = spLineCountFamily(lineCount);
+                        boolean fastPathEligible =
+                            (detectedVideoMode == 0 ||
+                             (detectedVideoMode == rto->videoStandardInput &&
+                              mdFastPathMisconfirmUsed == 0));
+                        if (fastPathEligible && readingFamily != 0 &&
+                            readingFamily != rto->videoStandardInput) {
+                            if (readingFamily == mdForeignFamily) {
+                                if (mdForeignStreak < 255) {
+                                    mdForeignStreak++;
+                                }
+                            } else {
+                                mdForeignFamily = readingFamily;
+                                mdForeignStreak = 1;
+                            }
+                        } else {
+                            mdForeignFamily = 0;
+                            mdForeignStreak = 0;
+                        }
+
+                        if (mdForeignStreak >= MD_FAST_FORMAT_PASSES &&
+                            (millis() - mdFastPathLastApply) > 3000) {
+                            // skip the strike escalation entirely - the source has changed
+                            // format, MD is stuck (or misconfirming), and the SP has named
+                            // the new format on MD_FAST_FORMAT_PASSES stable passes in a
+                            // row. Apply that family's preset directly, mirroring the
+                            // format change branch (same SOG mode / HDMI sync fix / preset
+                            // / counter reset sequence), so the result matches a normal
+                            // switch. In the misconfirm case the latch makes it a one-shot,
+                            // so a wrong guess merely returns the episode to the normal
+                            // escalation below.
+                            boolean viaMisconfirm = (detectedVideoMode != 0);
+                            if (viaMisconfirm) {
+                                mdFastPathMisconfirmUsed = 1;
+                            }
+                            mdFastPathLastApply = millis();
+                            if (viaMisconfirm) {
+                                SerialM.print(
+                                    F("\nMD watchdog fast path (misconfirm): stable vt:"));
+                                SerialM.print(lineCount);
+                                SerialM.print(F(" maps to mode "));
+                                SerialM.print(readingFamily);
+                                SerialM.print(F(" while MD keeps naming mode "));
+                                SerialM.print(rto->videoStandardInput);
+                                SerialM.println(F(" - switching preset"));
+                            } else {
+                                SerialM.print(F("\nMD watchdog fast path: stable vt:"));
+                                SerialM.print(lineCount);
+                                SerialM.print(F(" maps to mode "));
+                                SerialM.print(readingFamily);
+                                SerialM.println(F(" while MD is stuck - switching preset"));
+                            }
+                            // the documented stuck-MD lever: with MD freshly reset, the
+                            // getVideoMode() wait inside doPostPresetLoadSteps() finds a
+                            // classification instead of running into its 1.5s timeout
+                            resetModeDetect();
+                            delay(8);
+
+                            if (GBS::SP_SOG_MODE::read() == 1) {
+                                rto->syncTypeCsync = true;
+                            } else {
+                                rto->syncTypeCsync = false;
+                            }
+                            if (((rto->videoStandardInput == 1 || rto->videoStandardInput == 3) &&
+                                 (readingFamily == 2 || readingFamily == 4)) ||
+                                ((rto->videoStandardInput == 2 || rto->videoStandardInput == 4) &&
+                                 (readingFamily == 1 || readingFamily == 3))) {
+                                rto->useHdmiSyncFix = 1;
+                            } else {
+                                rto->useHdmiSyncFix = 0;
+                            }
+                            rto->videoIsFrozen = false;
+                            if (uopt->presetPreference != 10) {
+                                applyPresets(readingFamily);
+                            } else {
+                                rto->videoStandardInput = readingFamily;
+                                setOutModeHdBypass(false);
+                            }
+                            rto->videoStandardInput = readingFamily;
+                            rto->noSyncCounter = 0;
+                            rto->continousStableCounter = 0;
+                            newVideoModeCounter = 0;
+                            activeStableLineCount = 0;
+                            badHsActive = 0;
+                            preemptiveSogWindowStart = millis();
+                            delay(20);
+                            return;
+                        }
+
+                        if (mdImplausibleCounter >= 25) {
+                            mdImplausibleCounter = 0;
+                            strike = true;
+                            SerialM.print(F("\nMD plausibility watchdog: vt:"));
+                            SerialM.print(lineCount);
+                            SerialM.print(F(" can't belong to mode "));
+                            SerialM.println(rto->videoStandardInput);
+                        }
+                    }
+                }
+
+                if (strike) {
+                    // stage 1 only pays off when MD is actively naming the loaded mode
+                    // (measurement chain confused around a correctly loaded source). With
+                    // MD stuck on "no mode" the SP+MD resets never produced a
+                    // classification and only added ~1s per round; those cases go straight
+                    // to the stage 2 re-detection.
+                    if (mdStuckResetRounds < 2 && detectedVideoMode != 0) {
+                        // stage 1: repair the measurement chain
+                        mdStuckResetRounds++;
+                        SerialM.println(F("MD stuck: resetting SP + mode detect"));
+                        resetSyncProcessor();
+                        delay(8);
+                        resetModeDetect(); // SFTRST_MODE_RSTZ: the actual stuck-MD lever
+                        delay(8);
+                        updateSpDynamic(1); // detection friendly SP parameters
+                        // The lever this file already uses elsewhere for "MD not noticing
+                        // a change" (see the noSyncCounter == 38 handler). Pulsed here
+                        // instead of toggled once, so MD_VS_FLIP ends up as it was. The
+                        // nudge never rescues the MD on its own, but it keeps the chain
+                        // from decaying into the fully dead state - kept as insurance
+                        // alongside the dead handling.
+                        nudgeMD();
+                        delay(20);
+                        nudgeMD();
+                    } else {
+                        // stage 2: stuck through repeated resets - re-detect from scratch.
+                        // A full teardown starts a fresh detection round, so the misconfirm
+                        // latch re-arms - it only has to outlive one escalation.
+                        mdStuckResetRounds = 0;
+                        mdFastPathMisconfirmUsed = 0;
+                        SerialM.println(F("MD stuck through resets: full re-detection"));
+                        setResetParameters();
+                        prepareSyncProcessor();
+                        resetSyncProcessor();
+                        resetModeDetect();
+                        // the source is right there (HS was stably active a moment ago) -
+                        // don't sit out loop()'s 500ms source-check cadence, start the
+                        // re-detection immediately. It returns as soon as MD names the
+                        // mode, and handles a vanished source the same way the loop would.
+                        inputAndSyncDetect();
+                        rto->noSyncCounter = 0;
+                        mdStuckTeardowns++;
+                        if (mdStuckTeardowns >= 3) {
+                            mdStuckTeardowns = 0;
+                            mdStuckQuietLen = 600000; // 10 minutes
+                            SerialM.println(F("MD watchdog: giving up for 10 minutes"));
+                        } else {
+                            mdStuckQuietLen = 10000; // 10s breather
+                        }
+                        mdStuckQuietStart = millis();
+                        return; // start the next pass from a clean slate
+                    }
+                }
+            }
+        }
+    }
+
     if (rto->videoStandardInput >= 14) { // RGBHV checks
         static uint16_t RGBHVNoSyncCounter = 0;
 
@@ -1263,13 +1774,14 @@ void runSyncWatcher()
             }
             // if currently in scaling RGB/HV, check for "SD" < > "EDTV" style source changes
             else if ((sourceLines <= 535 && sourceLines != 0) && rto->videoStandardInput == 14) {
-                // Backported from JuergenLeber/gbs-control. Sort both the source and the preset that
-                // is loaded into the same three bands and act when they stop agreeing. Comparing the
-                // two against thresholds pairwise, as this used to, leaves a hole: a PAL-like source
-                // with an NTSC-like preset in place (312 lines against 262) matches none of the
-                // cases, so nothing switches back. That is the transition an Atari makes on reset -
-                // it comes up at 60Hz and switches itself to 50Hz a moment later, and the 60Hz preset
-                // stayed behind, leaving the frame time lock chasing an output rate it can never reach.
+                // Sort both the source and the preset that is loaded into the same three
+                // bands and act when they stop agreeing. Comparing the two against
+                // thresholds pairwise leaves a hole: a PAL-like source with an NTSC-like
+                // preset in place (312 lines against 262) matches none of the cases, so
+                // nothing switches back. That is the transition an Atari makes on reset -
+                // it comes up at 60Hz and switches itself to 50Hz a moment later, and the
+                // 60Hz preset stayed behind, leaving the frame time lock chasing an output
+                // rate it can never reach.
                 uint8_t sourceBand = (sourceLines < 280) ? 1 : ((sourceLines < 380) ? 2 : 3);
                 // 0 = no preset measured yet, which counts as disagreeing with anything
                 uint8_t activeBand = (activePresetLineCount == 0)
@@ -1437,11 +1949,11 @@ void runSyncWatcher()
             //Serial.println("RGBHV limit no sync");
         }
 
-        // Backported from JuergenLeber/gbs-control: catches an RGB/HV upscale mode that survives a
-        // source interruption (e.g. the source being reset) with stale measurements, which is what
-        // leaves a black screen, wrong colours, or a rejected output timing after the source comes
-        // back. Re-enters via mode 15 to classify the source from scratch rather than resuming with
-        // whatever base preset/sync setup was measured before the interruption.
+        // Catches an RGB/HV upscale mode that survives a source interruption (e.g. the
+        // source being reset) with stale measurements, which is what leaves a black
+        // screen, wrong colours, or a rejected output timing after the source comes back.
+        // Re-enters via mode 15 to classify the source from scratch rather than resuming
+        // with whatever base preset/sync setup was measured before the interruption.
 
         // remembers what the source measured once the upscale mode had settled on it
         static uint16_t settledLineCount = 0;
@@ -1607,12 +2119,12 @@ void runSyncWatcher()
                     runsWithSogBadStatus++;
                     //SerialM.print("test: "); SerialM.println(runsWithSogBadStatus);
                     if (runsWithSogBadStatus >= 4) {
-                        // Backported from JuergenLeber/gbs-control: check before switching. The SOG
-                        // bad flag stays up for as long as a source is disturbed, and a machine being
-                        // reset holds it up well past four passes without having changed its sync
-                        // type at all. The switch is a one way door: syncTypeCsync gates the discrete
-                        // H/V input off, so afterwards nothing can show that the source still has a
-                        // vertical of its own.
+                        // check before switching: the SOG bad flag stays up for as long as
+                        // a source is disturbed, and a machine being reset holds it up well
+                        // past four passes without having changed its sync type at all. The
+                        // switch is a one way door: syncTypeCsync gates the discrete H/V
+                        // input off, so afterwards nothing can show that the source still
+                        // has a vertical of its own.
                         if (probeDiscreteVSync(NULL)) {
                             // still RGB/HV, it was only disturbed
                             runsWithSogBadStatus = 0;
@@ -1749,6 +2261,8 @@ void runSyncWatcher()
         fallbackPresetTried = false; // full teardown, so the fallback is worth a fresh attempt
         crtcTimingHold = false;      // nothing left to hold, and it must not greet the next source
         modeUnknownCounter = 0;
+        crtcHoldVdeadCounter = 0;   // and the hold's dead-vertical counter starts fresh
+        mdFastPathMisconfirmUsed = 0; // whatever turns up next starts without the latch
         SerialM.println();
         goLowPowerWithInputDetection(); // does not further nest, so it can be called here // sets reset parameters
     }
