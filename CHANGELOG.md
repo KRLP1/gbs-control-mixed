@@ -1,6 +1,6 @@
 # Changelog
 
-## [v1.7.0] – WebUI Online Update + Bilingual UI
+## [v1.7.0] – WebUI Online Update + Bilingual UI + OLED
 
 ### Added
 - WebUI online firmware update: a new "Online-Update" section on the
@@ -41,11 +41,7 @@
   active, preventing two updaters from running at once.
 
 ### Changed
-- The WebUI is now bilingual (German + English). The new Online-Update
-  section introduces English alongside the existing German UI text;
-  status messages from the firmware (error texts, "Update erfolgreich!
-  Neustart ...", "Neue Firmware verfügbar", "Firmware ist aktuell")
-  remain in German, consistent with the OLED update flow.
+- The WebUI + OLED is now bilingual (German + English).
 
 ## [v1.6.0] – MD Plausibility Watchdog (Stuck-MD Auto-Recovery)
 
