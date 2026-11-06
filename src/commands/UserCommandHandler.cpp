@@ -215,6 +215,10 @@ void handleType2Command(char argument)
                 SerialM.println((uint8_t)(f.read() - '0'));
                 SerialM.print(F("disable external clock generator = "));
                 SerialM.println((uint8_t)(f.read() - '0'));
+                if (f.available()) {
+                    SerialM.print(F("menu language (0=de, 1=en) = "));
+                    SerialM.println((uint8_t)(f.read() - '0'));
+                }
 
                 f.close();
             }
@@ -752,6 +756,22 @@ void handleType2Command(char argument)
                 SerialM.println(F("restore filters failed"));
             }
         } break;
+        // Menu language commands ('I' = English, 'J' = German). Queued by /lang/set
+        // and executed here in the loop() context, so the LittleFS write cannot
+        // race with other saves. The serial console uses the same letters for its
+        // own debug commands ('I' = VDS register dump, 'J' = PLL/AD reset), but that
+        // is a separate command channel (/sc) and is not affected. Only a direct
+        // /uc?I or /uc?J request ends up here.
+        case 'I': // menu language English (OLED follows after a restart)
+            uopt->menuLanguage = 1;
+            saveUserPrefs();
+            SerialM.println(F("menu language: English"));
+            break;
+        case 'J': // menu language German
+            uopt->menuLanguage = 0;
+            saveUserPrefs();
+            SerialM.println(F("menu language: German"));
+            break;
         default:
             break;
     }

@@ -312,11 +312,13 @@ void OLEDMenuManager::drawStatusBar(bool negative)
         this->display->setColor(OLEDDISPLAY_COLOR::WHITE);
     }
     if (peakItem() != rootItem) {
-        // not on main menu, draw back button
-        this->display->drawXbm(0, 0, IMAGE_ITEM(OM_STATUS_BAR_BACK));
+        // not on main menu, draw back button (language-dependent bitmap)
+        const OMBitmap back = OM_BITMAP_LANG(OM_STATUS_BAR_BACK, oledMenuLanguage());
+        this->display->drawXbm(0, 0, back.width, back.height, back.data);
     } else {
-        // main menu, draw some custom info
-        this->display->drawXbm(0, 0, IMAGE_ITEM(OM_STATUS_CUSTOM));
+        // main menu, draw some custom info (language-dependent bitmap)
+        const OMBitmap custom = OM_BITMAP_LANG(OM_STATUS_CUSTOM, oledMenuLanguage());
+        this->display->drawXbm(0, 0, custom.width, custom.height, custom.data);
     }
     static uint8_t totalItems = 0;
     uint8_t curIndex = 1;

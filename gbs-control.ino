@@ -128,6 +128,7 @@
 
 // Project headers - src/web
 #include "src/web/SerialMirror.h"
+#include "src/web/WebOta.h"
 #include "src/web/WebServer.h"
 #include "src/web/WebSocketHandler.h"
 
@@ -279,7 +280,10 @@ void setup()
 #if USE_NEW_OLED_MENU
     attachInterrupt(digitalPinToInterrupt(pin_clk), isrRotaryEncoderRotateForNewMenu, FALLING);
     attachInterrupt(digitalPinToInterrupt(pin_switch), isrRotaryEncoderPushForNewMenu, FALLING);
-    initOLEDMenu();
+    // initOLEDMenu() is deliberately not called here: the menu tree is built after
+    // the user preferences are loaded (further down), because the menu language
+    // (uopt->menuLanguage) is only known then. The ISRs above only set flags
+    // (oledNav/rotaryIsrID), so turning the knob while booting is harmless.
     initOSD();
 #else
     // ISR TO PIN
@@ -556,10 +560,26 @@ void setup()
                 uopt->peakingLevel = 1; // default: normal peaking
             }
 
+            // #22: menu language. If the field is missing (old preferencesv2.txt from
+            // before this option existed), German applies, same as the fresh defaults.
+            if (f.available()) {
+                uopt->menuLanguage = (uint8_t)(f.read() - '0'); // #22
+                if (uopt->menuLanguage > 1)
+                    uopt->menuLanguage = 0;
+            } else {
+                uopt->menuLanguage = 0; // default: German
+            }
+
             f.close();
             syncReverseRotaryEncoderIsrMirror();
         }
     }
+
+#if USE_NEW_OLED_MENU
+    // Build the menu tree only now: the preferences (including the menu language)
+    // are loaded, so the language of the OLED menu is known.
+    initOLEDMenu();
+#endif
 
 
     GBS::PAD_CKIN_ENZ::write(1); // disable to prevent startup spike damage
@@ -746,6 +766,7 @@ void loop()
 
     handleWiFi(0); // WiFi + OTA + WS + MDNS, checks for server enabled + started
     handleWiFiRetry(); // AP fallback: try the stored network again (top level of loop() only)
+    webOtaProcess();   // web-triggered online update (no-op when idle)
     
     // is there a command from Terminal or web ui?
     // Serial takes precedence

@@ -1,6 +1,7 @@
 #ifndef OSD_MANAGER_H_
 #define OSD_MANAGER_H_
 #include "../gbs/tv5725.h"
+#include "OLEDMenuStrings.h"
 // Size of the OSD elements at 1x zoom, in OSD pixels. The programming guide
 // (chapter 7) gives 131 x 19 for the icon menu and 13 + 2 + <bar length> for the
 // value bar (icon + bar). On the reference display (1920x1080) the icon menu
@@ -140,10 +141,8 @@ public:
     // Name of the icon the cursor is on (shown on the OLED while the OSD is open)
     const char *selectedName() const
     {
-        static const char *const names[8] = {
-            "Helligkeit", "Kontrast", "Scanlines", "Zeilenfilter",
-            "Position Y", "Position X", "Skalierung Y", "Skalierung X"};
-        return names[cursor & 7];
+        // MSG_OSD_BRIGHTNESS..MSG_OSD_SCALE_X follow the OSDIcon order
+        return oledMsg(MSG_OSD_BRIGHTNESS + (cursor & 7));
     }
     // Horizontal OSD center in display-window units; 0 = center of VDS_DIS_HB.
     // Set by applyWindowbox960(), only used while the windowbox preset is active.

@@ -37,6 +37,7 @@ void loadDefaultUserOptions()
     uopt->disableExternalClockGenerator = 0; // #19
     uopt->reverseRotaryEncoderForOledMenu =
         REVERSE_ROTARY_ENCODER_FOR_OLED_MENU > 0 ? 1 : 0; // #20 default from build-time macro
+    uopt->menuLanguage = 0;                               // #22 default: German
     syncReverseRotaryEncoderIsrMirror();
 }
 
@@ -68,6 +69,7 @@ void saveUserPrefs()
     f.write(uopt->disableExternalClockGenerator + '0'); // #19
     f.write(uopt->reverseRotaryEncoderForOledMenu + '0'); // #20
     f.write(uopt->peakingLevel + '0'); // #21
+    f.write(uopt->menuLanguage + '0'); // #22 (0=German, 1=English)
 
     f.close();
     syncReverseRotaryEncoderIsrMirror();

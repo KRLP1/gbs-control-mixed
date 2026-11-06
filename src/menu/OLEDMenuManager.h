@@ -6,6 +6,7 @@
 #define OLED_MENU_MANAGER_H_
 #include "OLEDMenuItem.h"
 #include "OLEDMenuConfig.h"
+#include "OLEDMenuStrings.h" // oledMenuLanguage(): language of the bitmaps
 #define IMAGE_ITEM(name) name##_WIDTH, name##_HEIGHT, name
 #define CENTER_IMAGE(name) (OLED_MENU_WIDTH - name##_WIDTH) / 2, (OLED_MENU_HEIGHT - name##_HEIGHT) / 2, name##_WIDTH, name##_HEIGHT, name
 enum class OLEDMenuState
@@ -89,9 +90,11 @@ private:
     {
         display->clear();
         display->setColor(OLEDDISPLAY_COLOR::WHITE);
-        constexpr int16_t max_x = OLED_MENU_WIDTH - OM_SCREEN_SAVER_WIDTH;
-        constexpr int16_t max_y = OLED_MENU_HEIGHT - OM_SCREEN_SAVER_HEIGHT;
-        display->drawXbm(rand() % max_x, rand() % max_y, IMAGE_ITEM(OM_SCREEN_SAVER));
+        // bitmap for the menu language (0 = German, 1 = English)
+        const OMBitmap saver = OM_BITMAP_LANG(OM_SCREEN_SAVER, oledMenuLanguage());
+        const int16_t max_x = OLED_MENU_WIDTH - saver.width;
+        const int16_t max_y = OLED_MENU_HEIGHT - saver.height;
+        display->drawXbm(rand() % max_x, rand() % max_y, saver.width, saver.height, saver.data);
         display->display();
     }
 
@@ -128,6 +131,12 @@ public:
             state = OLEDMenuState::ITEM_HANDLING;
             delay(OLED_MENU_REFRESH_INTERVAL_IN_MS); // avoid retriggering current button
         }
+    }
+    // True while a handler owns the display via freeze() (e.g. the OLED update
+    // screen). Used by WebOta to refuse web-triggered updates in that window.
+    bool isFrozen() const
+    {
+        return state == OLEDMenuState::FREEZING;
     }
     OLEDDisplay *getDisplay()
     {

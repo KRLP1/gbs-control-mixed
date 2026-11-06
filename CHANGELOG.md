@@ -1,5 +1,52 @@
 # Changelog
 
+## [v1.7.0] – WebUI Online Update + Bilingual UI
+
+### Added
+- WebUI online firmware update: a new "Online-Update" section on the
+  system page lets the user check GitHub (KRLP1/gbs-control-mixed) for
+  newer firmware and install it directly from the browser, with SHA256
+  checksum verification. The device drops websocket clients and (on
+  ESP8266) stops the HTTP server during the download to free heap for
+  the SSL handshake, then restarts automatically after flashing. The
+  WebUI polls /ota/status every 2.5 s during the operation, shows a
+  progress bar (determinate on ESP32 where the async server keeps
+  answering, indeterminate on ESP8266 where the server is stopped),
+  and auto-reloads the page once the device has rebooted. A two-step
+  confirmation (press "Jetzt aktualisieren" twice within 5 s) prevents
+  accidental updates, mirroring the ENTER-to-confirm pattern from the
+  OLED update screen.
+
+- New WebOta module (`src/web/WebOta.cpp`, `src/web/WebOta.h`): a
+  latch-based async-to-loop dispatcher, same pattern as the OLED
+  update flow. `webOtaRequest()` (called from AsyncWebServer handlers)
+  only latches the requested action (CHECK or UPDATE) and returns
+  immediately; `webOtaProcess()` (called from `loop()`) executes it
+  end to end with the web services suspended. State/progress are
+  `volatile uint8_t` (atomic reads from the async web task);
+  `latestVersion`/`message` are fixed-size buffers written before the
+  state is updated, so a reader that observes a new state also sees
+  the completed strings.
+
+- New API endpoints: `/ota/status` (GET, returns JSON with state,
+  progress, current version, latest version, message), `/ota/check`
+  (GET, latches a check request), `/ota/update` (GET, latches an
+  update request). `/ota/status` is served without the free-heap gate,
+  like `/status/get`, because the WebUI polls it while heap is tight
+  during an update.
+
+- `OLEDMenuManager::isFrozen()` returns true while a handler owns the
+  display via `freeze()` (e.g. the OLED update screen). WebOta uses
+  this to refuse web-triggered updates while the OLED update flow is
+  active, preventing two updaters from running at once.
+
+### Changed
+- The WebUI is now bilingual (German + English). The new Online-Update
+  section introduces English alongside the existing German UI text;
+  status messages from the firmware (error texts, "Update erfolgreich!
+  Neustart ...", "Neue Firmware verfügbar", "Firmware ist aktuell")
+  remain in German, consistent with the OLED update flow.
+
 ## [v1.6.0] – MD Plausibility Watchdog (Stuck-MD Auto-Recovery)
 
 ### Added

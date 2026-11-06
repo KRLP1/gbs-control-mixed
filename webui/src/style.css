@@ -568,7 +568,7 @@ section[name="alert"] {
   width: 100%;
 }
 
-.gbs-button[gbs-name="Leer"] ~ .gbs-button[gbs-name="Leer"] {
+.gbs-button[gbs-empty] ~ .gbs-button[gbs-empty] {
   display: none;
 }
 
@@ -699,5 +699,48 @@ section[name="alert"] {
 @keyframes gbs-blinker {
   50% {
     opacity: 0;
+  }
+}
+
+/** online update (system page) */
+.gbs-ota__tile {
+  cursor: default;
+}
+
+.gbs-ota__message {
+  color: var(--color-silver-chalice);
+  font-size: 14px;
+  line-height: 18px;
+  min-height: 18px;
+  padding: 8px 2px 0 2px;
+  width: 100%;
+  word-break: break-word;
+}
+
+.gbs-ota__bar {
+  background: var(--color-mine-shaft);
+  height: 10px;
+  margin: 10px 2px 2px 2px;
+  width: 100%;
+}
+
+.gbs-ota__bar-fill {
+  background: var(--color-primary);
+  height: 100%;
+  transition: width 0.5s linear;
+  width: 0%;
+}
+
+.gbs-ota__bar--indeterminate .gbs-ota__bar-fill {
+  animation: gbs-ota-indeterminate 1.4s infinite linear;
+  width: 35%;
+}
+
+@keyframes gbs-ota-indeterminate {
+  0% {
+    margin-left: -35%;
+  }
+  100% {
+    margin-left: 100%;
   }
 }

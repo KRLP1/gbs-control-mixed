@@ -1,3 +1,389 @@
+/** i18n: UI languages (German default, matches the device default) */
+const I18N = {
+    de: {
+        // Presets section
+        legend_resolution: "Auflösung",
+        help_res_1: "Wählt eine Ausgabeauflösung aus diesen Voreinstellungen.",
+        help_res_2: "Die Auswahl wird zusätzlich für den Start verwendet. Für NTSC-Quellen wird 1280x960 empfohlen, für PAL 1280x1024.",
+        help_res_3: 'Über die Option "Passende Presets" in den Einstellungen kann automatisch zwischen beiden umgeschaltet werden.',
+        help_res_4: "Die Auswahl einer Auflösung macht sie außerdem zum neuen Start-Preset.",
+        btn_passthrough: "Durchleitung",
+        help_presets_1: "Um eigene Anpassungen zu speichern: zuerst einen Slot für das neue Preset auswählen, dann in diesem Slot speichern oder daraus laden.",
+        help_presets_2: "Die Auswahl eines Slots macht ihn außerdem zum neuen Start-Preset.",
+        btn_preset_load: "Preset laden",
+        btn_preset_save: "Preset speichern",
+        btn_preset_delete: "Preset löschen",
+        // Control section
+        legend_adc_gain: "ADC-Verstärkung (Helligkeit)",
+        help_adc_1: "Gain +/- passt die Verstärkung für das aktuell geladene Preset an.",
+        help_adc_2: "Auto-Gain erhöht die Verstärkung, sodass helle Bereiche als Weiß dargestellt werden, und verringert sie wieder, sobald ein Clipping erkannt wird. Zum Kalibrieren einige Sekunden auf ein weißes Bild richten.",
+        btn_gain: "Verstärkung",
+        legend_image_control: "Bildsteuerung",
+        btn_move: "Verschieben",
+        btn_scale: "Skalieren",
+        btn_borders: "Rahmen",
+        // Filters section
+        btn_intensity: "Intensität",
+        btn_linefilter: "Linienfilter",
+        help_filters_1: "Scanlines funktionieren nur bei 240p-Quellen oder bei 480i mit Bob-Deinterlacing.",
+        help_filters_2: "Der Linienfilter beseitigt blockartige Pixelartefakte beim Hochskalieren über 480p hinaus und wird empfohlen.",
+        btn_peaking: "Kantenanhebung",
+        btn_peaking_level: "Peaking-Stufe",
+        btn_step: "Sprungantwort",
+        help_peaking_1: "Kantenanhebung erhöht den Kontrast an horizontalen Helligkeitssprüngen und wird empfohlen.",
+        help_peaking_2: "Peaking-Stufe wählt die Intensität der Kantenanhebung: Aus, Normal, Stark oder Max.",
+        help_peaking_3: "Sprungantwort erhöht die Schärfe an horizontalen Farbsprüngen und wird empfohlen.",
+        legend_color: "Farbkorrektur",
+        btn_brightness: "Helligkeit",
+        btn_contrast: "Kontrast",
+        btn_default: "Standard",
+        help_color_1: "Pb/U gain - ändert die Blau-Verstärkung.",
+        help_color_2: "Pr/V gain - ändert die Rot-Verstärkung.",
+        // Preferences section
+        legend_settings: "Einstellungen",
+        pref_matched: "Passende Presets",
+        help_matched: "Wenn aktiviert, wird standardmäßig 1280x960 für NTSC 60 und 1280x1024 für PAL 50 verwendet (gilt nicht für 720p-/1080p-Presets).",
+        pref_fullheight: "Volle Höhe",
+        help_fullheight_1: "Manche Presets nutzen standardmäßig nicht die gesamte vertikale Ausgabeauflösung, wodurch einige Zeilen schwarz bleiben.",
+        help_fullheight_2: "Mit aktivierter Full-Height-Option skalieren diese Presets stattdessen so, dass mehr Bildschirmhöhe ausgefüllt wird.",
+        help_fullheight_3: "(Betrifft derzeit nur 1920 x 1080)",
+        pref_reverse_encoder: "OLED-Menü-Drehregler umkehren",
+        help_reverse_1: "Manche Geräte (z. B. ODV-GBS-C) benötigen diese Option aktiviert, damit eine Drehung im Uhrzeigersinn im OLED-Menü nach unten bewegt.",
+        help_reverse_2: "Die Einstellung wird auf dem Gerät gespeichert und bleibt über Firmware-Updates hinweg erhalten.",
+        pref_scaling: "Niedrige Auflösung: Hochskalieren verwenden",
+        help_scaling_1: "VGA-Eingang mit niedriger Auflösung: Durchreichen oder Hochskalieren",
+        help_scaling_2: "Quellen mit niedriger Auflösung können entweder direkt durchgereicht oder hochskaliert werden.",
+        help_scaling_3: "Beim Hochskalieren kann es zu kleineren Rand-/Skalierungsproblemen kommen, dafür ist die Kompatibilität mit Displays besser.",
+        help_scaling_4: "Außerdem werden andere Bildwiederholraten als 60 Hz bisher nicht gut unterstützt.",
+        help_scaling_5: 'Als "niedrige Auflösung" gilt derzeit alles bis einschließlich 640x480 (525 aktive Zeilen).',
+        pref_output_mode: "Ausgabe RGBHV/Component",
+        help_output_1: "Der Standard-Ausgabemodus ist RGBHV, geeignet für VGA-Kabel oder HDMI-Konverter.",
+        help_output_2: "Es kann auch ein experimenteller YPbPr-Modus gewählt werden. Die Kompatibilität ist noch lückenhaft.",
+        pref_pal60: "Ausgabe-Bildrate: PAL 50 Hz auf 60 Hz erzwingen",
+        help_pal60_1: 'Wenn der Fernseher keine 50-Hz-Quellen unterstützt (Anzeige "unbekanntes Format", egal welches Preset), kann diese Option helfen.',
+        help_pal60_2: "Die Bildrate wird dadurch weniger flüssig. Neustart erforderlich.",
+        pref_extclock: "Externen Taktgenerator deaktivieren",
+        help_extclock_1: "Standardmäßig ist der externe Taktgenerator aktiviert, wenn er installiert ist.",
+        help_extclock_2: 'Bei Problemen mit anderen Optionen, z. B. "PAL 50 Hz auf 60 Hz erzwingen", kann er deaktiviert werden. Neustart erforderlich.',
+        pref_adc_cal: "ADC-Kalibrierung",
+        help_adc_cal_1: "Gbscontrol kalibriert die ADC-Offsets beim Start.",
+        help_adc_cal_2: "Bei Problemen mit Farbverschiebungen diese Funktion versuchsweise deaktivieren.",
+        pref_ftl: "FrameTime Lock aktiv",
+        help_ftl_1: "Diese Option hält Eingangs- und Ausgangstiming synchron und behebt den gelegentlich auftretenden horizontalen Bildriss.",
+        help_ftl_2: "Es stehen zwei Methoden zur Verfügung. Bei schwarzem Bildschirm oder vertikalem Versatz die andere Methode ausprobieren.",
+        pref_ftl_method: "FrameTime-Lock-Methode",
+        help_ftl_method_1: "VTotal + VSST: passt vertikale Gesamtzeilenzahl und vertikalen Sync-Beginn gemeinsam an, für präzises Locking.",
+        help_ftl_method_2: "Nur VTotal: passt nur die vertikale Gesamtzeilenzahl an, einfacherer Ansatz.",
+        pref_deint: "Deinterlace-Methode",
+        help_deint_1: "Gbscontrol erkennt interlaced Inhalte und schaltet das Deinterlacing automatisch um.",
+        help_deint_2: "Bob-Methode: praktisch kein Deinterlacing, kein zusätzlicher Lag, flackert aber, kombinierbar mit Scanlines",
+        help_deint_3: "Motion Adaptive: entfernt Flackern, zeigt aber einige Artefakte bei bewegten Details",
+        help_deint_4: "Wenn möglich, die Quelle auf progressive Ausgabe einstellen. Andernfalls wird Motion Adaptive empfohlen.",
+        pref_devmode: "Entwicklermodus",
+        help_devmode: "Aktiviert das Entwicklermenü mit verschiedenen Debugging-Werkzeugen",
+        pref_slot_filters: "Filterung pro Slot speichern",
+        help_slot_filters_1: "Wenn aktiviert, stellen gespeicherte Slots ihre eigenen Filtereinstellungen wieder her.",
+        help_slot_filters_2: "Wenn deaktiviert, behalten gespeicherte Slots die aktuellen Filtereinstellungen bei.",
+        // Developer section
+        legend_dev: "Entwickler",
+        btn_console: "Konsole umschalten",
+        btn_mem_left: "MEM Links",
+        btn_mem_right: "MEM Rechts",
+        btn_hs_left: "HS Links",
+        btn_hs_right: "HS Rechts",
+        btn_list_options: "Optionen auflisten",
+        btn_show_info: "Info anzeigen",
+        btn_get_timings: "Video-Timings abrufen",
+        btn_freeze: "Erfassung einfrieren",
+        btn_adc_filter: "ADC-Filter",
+        btn_sdram: "SDRAM umschalten",
+        btn_debug_view: "Debug-Ansicht",
+        btn_chip_reset: "Chip zurücksetzen",
+        btn_htotal_resync: "HTotal resynchronisieren",
+        btn_sync_invert: "Sync invertieren",
+        // System section
+        btn_ota: "OTA aktivieren",
+        btn_restart: "Neustart",
+        btn_reset_defaults: "Auf Standard zurücksetzen",
+        legend_backup: "Backup [nur für dasselbe Gerät]",
+        help_backup_1: "Backup / Wiederherstellung der Konfigurationsdateien",
+        help_backup_2: "Backup nur für das aktuelle Gerät gültig",
+        btn_restore: "Wiederherstellen",
+        legend_wifi: "WLAN",
+        legend_ssid_select: "SSID auswählen",
+        legend_ssid_connect: "Mit SSID verbinden",
+        ph_password: "Passwort",
+        btn_connect: "Verbinden",
+        help_hostname_1: "Der über mDNS bekanntgegebene Hostname. Zugriff auf das Gerät unter <hostname>.local",
+        help_hostname_2: "Erlaubte Zeichen: Buchstaben, Ziffern, Bindestriche. Max. 32 Zeichen. Neustart erforderlich.",
+        btn_save_restart: "Speichern & Neustart",
+        // Prompt / alert / output
+        prompt_title: "Eingabe",
+        btn_cancel: "ABBRECHEN",
+        alert_title: "HINWEIS",
+        legend_output: "Ausgabe",
+        // dynamic strings
+        prompt_slot_name: "Slot-Namen vergeben",
+        slot_empty: "Leer",
+        slot_meta_downscale: "VERKLEINERT",
+        slot_meta_custom: "EIGEN",
+        alert_invalid_backup: "Ungültige Backup-Datei",
+        alert_restore_reboot: "GBSControl wird neu gestartet.\nBitte warten, bis WLAN wieder verbunden ist, dann OK klicken",
+        wifi_sta_scanning: "STA | Netzwerk suchen",
+        alert_invalid_hostname: "Ungültiger Hostname. Nur Buchstaben, Ziffern und Bindestriche erlaubt (kein Bindestrich am Anfang/Ende, max. 32 Zeichen).",
+        alert_hostname_set: "Hostname auf '{h}' gesetzt. GBSControl startet neu.\nNach dem Neustart erreichbar unter http://{h}.local/",
+        alert_wifi_reboot: "GBSControl startet neu und verbindet sich mit {ssid}. Bitte einige Sekunden warten und dann OK drücken",
+        wifi_scanning: "Suche läuft...",
+        wifi_no_networks: "Keine Netzwerke gefunden",
+        alert_ap_mode: 'Wechsle in den AP-Modus. Bitte mit der SSID "gbscontrol" verbinden und dann OK klicken',
+        peak_off: "Peaking: Aus",
+        peak_normal: "Peaking: Normal",
+        peak_strong: "Peaking: Stark",
+        peak_max: "Peaking: Max",
+        // Online update
+        legend_ota: "Online-Update",
+        help_ota_1: "Prüft auf GitHub (KRLP1/gbs-control-mixed) nach neuerer Firmware und installiert sie direkt (mit SHA256-Prüfung)",
+        help_ota_2: "Während des Updates wird die Verbindung kurz getrennt; das Gerät startet danach automatisch neu",
+        ota_installed: "Installiert:",
+        ota_available_label: "Verfügbar:",
+        btn_ota_check: "Nach Update suchen",
+        btn_ota_start: "Jetzt aktualisieren",
+        ota_checking: "Prüfe auf Updates …",
+        ota_checking_lost: "Prüfe … Verbindung kurzzeitig unterbrochen (normal)",
+        ota_updating_lost: "Update läuft … Verbindung kurzzeitig unterbrochen (normal)",
+        ota_downloading: "Download läuft …",
+        ota_downloading_pct: "Download läuft … {p}%",
+        ota_reboot: "Update erfolgreich! Das Gerät startet jetzt neu …",
+        ota_up_to_date: "Firmware ist aktuell",
+        ota_update_available: "Neue Firmware verfügbar",
+        ota_confirm: "Bitte erneut drücken, um das Update zu starten …",
+        ota_starting: "Update wird gestartet …",
+        ota_back: "Gerät ist zurück (Firmware {v}).",
+        ota_busy: "Gerät beschäftigt, bitte später erneut versuchen.",
+        ota_unreachable: "Gerät nicht erreichbar.",
+        ota_no_answer: "Keine Antwort vom Gerät. Bitte Seite neu laden.",
+        ota_err_wifi: "WLAN nicht verbunden",
+        ota_err_check: "Prüfung fehlgeschlagen",
+        ota_err_download: "Download fehlgeschlagen",
+        ota_err_flash: "Flashen fehlgeschlagen",
+        ota_err_checksum: "Prüfsummenfehler (SHA256)",
+        ota_err_space: "Zu wenig freier Speicher",
+        ota_err_oled: "OLED-Menü aktiv, bitte zuerst schließen",
+        ota_err_unknown: "Unbekannter Fehler",
+        lang_button: "Sprache: Deutsch",
+    },
+    en: {
+        // Presets section
+        legend_resolution: "Resolution",
+        help_res_1: "Select an output resolution from these presets.",
+        help_res_2: "The selection is also used as the startup preset. 1280x960 is recommended for NTSC sources, 1280x1024 for PAL.",
+        help_res_3: 'The "Matching presets" option in the settings switches between the two automatically.',
+        help_res_4: "Selecting a resolution also makes it the new startup preset.",
+        btn_passthrough: "Passthrough",
+        help_presets_1: "To save your own tweaks: first select a slot for the new preset, then save to or load from that slot.",
+        help_presets_2: "Selecting a slot also makes it the new startup preset.",
+        btn_preset_load: "Load preset",
+        btn_preset_save: "Save preset",
+        btn_preset_delete: "Delete preset",
+        // Control section
+        legend_adc_gain: "ADC gain (brightness)",
+        help_adc_1: "Gain +/- adjusts the gain for the currently loaded preset.",
+        help_adc_2: "Auto-gain raises the gain so bright areas show as white, and lowers it again as soon as clipping is detected. Point it at a white image for a few seconds to calibrate.",
+        btn_gain: "Gain",
+        legend_image_control: "Image control",
+        btn_move: "Move",
+        btn_scale: "Scale",
+        btn_borders: "Borders",
+        // Filters section
+        btn_intensity: "Intensity",
+        btn_linefilter: "Line filter",
+        help_filters_1: "Scanlines only work with 240p sources, or 480i with bob deinterlacing.",
+        help_filters_2: "The line filter removes blocky pixel artifacts when upscaling beyond 480p and is recommended.",
+        btn_peaking: "Peaking",
+        btn_peaking_level: "Peaking level",
+        btn_step: "Step response",
+        help_peaking_1: "Peaking increases the contrast at horizontal brightness transitions and is recommended.",
+        help_peaking_2: "Peaking level selects the peaking intensity: off, normal, strong or max.",
+        help_peaking_3: "Step response increases sharpness at horizontal color transitions and is recommended.",
+        legend_color: "Color correction",
+        btn_brightness: "Brightness",
+        btn_contrast: "Contrast",
+        btn_default: "Default",
+        help_color_1: "Pb/U gain - changes the blue gain.",
+        help_color_2: "Pr/V gain - changes the red gain.",
+        // Preferences section
+        legend_settings: "Settings",
+        pref_matched: "Matching presets",
+        help_matched: "When enabled, 1280x960 is used by default for NTSC 60 and 1280x1024 for PAL 50 (does not apply to 720p/1080p presets).",
+        pref_fullheight: "Full height",
+        help_fullheight_1: "Some presets do not use the full vertical output resolution by default, which leaves some lines black.",
+        help_fullheight_2: "With the full-height option enabled, those presets scale to fill more of the screen height instead.",
+        help_fullheight_3: "(Currently only affects 1920 x 1080)",
+        pref_reverse_encoder: "Reverse OLED menu rotary encoder",
+        help_reverse_1: "Some devices (e.g. ODV-GBS-C) need this option enabled so that a clockwise rotation moves down in the OLED menu.",
+        help_reverse_2: "The setting is stored on the device and survives firmware updates.",
+        pref_scaling: "Low resolution: use upscaling",
+        help_scaling_1: "Low-resolution VGA input: pass through or upscale",
+        help_scaling_2: "Low-resolution sources can either be passed through directly or upscaled.",
+        help_scaling_3: "Upscaling can cause minor border/scaling issues, but display compatibility is better.",
+        help_scaling_4: "Also, refresh rates other than 60 Hz are not yet well supported.",
+        help_scaling_5: '"Low resolution" currently means everything up to and including 640x480 (525 active lines).',
+        pref_output_mode: "Output RGBHV/component",
+        help_output_1: "The default output mode is RGBHV, suitable for VGA cables or HDMI converters.",
+        help_output_2: "An experimental YPbPr mode is also available. Compatibility is still patchy.",
+        pref_pal60: "Output frame rate: force PAL 50 Hz to 60 Hz",
+        help_pal60_1: 'If the TV does not support 50 Hz sources (showing "unknown format", regardless of the preset), this option may help.',
+        help_pal60_2: "The frame rate becomes less smooth as a result. Restart required.",
+        pref_extclock: "Disable external clock generator",
+        help_extclock_1: "By default the external clock generator is enabled when one is installed.",
+        help_extclock_2: 'If there are problems with other options, e.g. "force PAL 50 Hz to 60 Hz", it can be disabled. Restart required.',
+        pref_adc_cal: "ADC calibration",
+        help_adc_cal_1: "GBS-Control calibrates the ADC offsets at startup.",
+        help_adc_cal_2: "If you experience color shifts, try disabling this.",
+        pref_ftl: "FrameTime lock active",
+        help_ftl_1: "This option keeps input and output timing in sync and fixes the occasional horizontal screen tear.",
+        help_ftl_2: "Two methods are available. If the screen is black or vertically offset, try the other method.",
+        pref_ftl_method: "FrameTime lock method",
+        help_ftl_method_1: "VTotal + VSST: adjusts the vertical total line count and the vertical sync start together, for precise locking.",
+        help_ftl_method_2: "VTotal only: adjusts only the vertical total line count, a simpler approach.",
+        pref_deint: "Deinterlace method",
+        help_deint_1: "GBS-Control detects interlaced content and switches the deinterlacing automatically.",
+        help_deint_2: "Bob method: virtually no deinterlacing, no added lag, but it flickers; can be combined with scanlines",
+        help_deint_3: "Motion adaptive: removes the flicker but shows some artifacts on moving details",
+        help_deint_4: "If possible, set the source to progressive output. Otherwise motion adaptive is recommended.",
+        pref_devmode: "Developer mode",
+        help_devmode: "Enables the developer menu with various debugging tools",
+        pref_slot_filters: "Save filters per slot",
+        help_slot_filters_1: "When enabled, saved slots restore their own filter settings.",
+        help_slot_filters_2: "When disabled, saved slots keep the current filter settings.",
+        // Developer section
+        legend_dev: "Developer",
+        btn_console: "Toggle console",
+        btn_mem_left: "MEM left",
+        btn_mem_right: "MEM right",
+        btn_hs_left: "HS left",
+        btn_hs_right: "HS right",
+        btn_list_options: "List options",
+        btn_show_info: "Show info",
+        btn_get_timings: "Get video timings",
+        btn_freeze: "Freeze capture",
+        btn_adc_filter: "ADC filter",
+        btn_sdram: "Toggle SDRAM",
+        btn_debug_view: "Debug view",
+        btn_chip_reset: "Reset chip",
+        btn_htotal_resync: "Resync HTotal",
+        btn_sync_invert: "Invert sync",
+        // System section
+        btn_ota: "Enable OTA",
+        btn_restart: "Restart",
+        btn_reset_defaults: "Reset to defaults",
+        legend_backup: "Backup [intended for same device]",
+        help_backup_1: "Back up / restore the configuration files",
+        help_backup_2: "A backup is only valid for the device it was created on",
+        btn_restore: "Restore",
+        legend_wifi: "WiFi",
+        legend_ssid_select: "Select SSID",
+        legend_ssid_connect: "Connect to SSID",
+        ph_password: "Password",
+        btn_connect: "Connect",
+        help_hostname_1: "The hostname announced via mDNS. Access the device at <hostname>.local",
+        help_hostname_2: "Allowed characters: letters, digits, hyphens. Max. 32 characters. Restart required.",
+        btn_save_restart: "Save & restart",
+        // Prompt / alert / output
+        prompt_title: "Input",
+        btn_cancel: "CANCEL",
+        alert_title: "NOTICE",
+        legend_output: "Output",
+        // dynamic strings
+        prompt_slot_name: "Name the slot",
+        slot_empty: "Empty",
+        slot_meta_downscale: "DOWNSCALED",
+        slot_meta_custom: "CUSTOM",
+        alert_invalid_backup: "Invalid backup file",
+        alert_restore_reboot: "GBS-Control is restarting.\nPlease wait until WiFi is connected again, then click OK",
+        wifi_sta_scanning: "STA | Scanning...",
+        alert_invalid_hostname: "Invalid hostname. Only letters, digits and hyphens are allowed (no leading/trailing hyphen, max. 32 characters).",
+        alert_hostname_set: "Hostname set to '{h}'. GBS-Control is restarting.\nAfter the restart it will be reachable at http://{h}.local/",
+        alert_wifi_reboot: "GBS-Control is restarting and will connect to {ssid}. Please wait a few seconds, then press OK",
+        wifi_scanning: "Scanning...",
+        wifi_no_networks: "No networks found",
+        alert_ap_mode: 'Switching to AP mode. Please connect to the SSID "gbscontrol" and then click OK',
+        peak_off: "Peaking: Off",
+        peak_normal: "Peaking: Normal",
+        peak_strong: "Peaking: Strong",
+        peak_max: "Peaking: Max",
+        // Online update
+        legend_ota: "Online update",
+        help_ota_1: "Checks GitHub (KRLP1/gbs-control-mixed) for newer firmware and installs it directly (with SHA256 check)",
+        help_ota_2: "The connection is briefly interrupted during the update; the device then restarts automatically",
+        ota_installed: "Installed:",
+        ota_available_label: "Available:",
+        btn_ota_check: "Check for update",
+        btn_ota_start: "Update now",
+        ota_checking: "Checking for updates …",
+        ota_checking_lost: "Checking … connection briefly interrupted (normal)",
+        ota_updating_lost: "Update in progress … connection briefly interrupted (normal)",
+        ota_downloading: "Downloading …",
+        ota_downloading_pct: "Downloading … {p}%",
+        ota_reboot: "Update successful! The device is restarting now …",
+        ota_up_to_date: "Firmware is up to date",
+        ota_update_available: "New firmware available",
+        ota_confirm: "Press again to start the update …",
+        ota_starting: "Starting update …",
+        ota_back: "Device is back (firmware {v}).",
+        ota_busy: "Device busy, please try again later.",
+        ota_unreachable: "Device not reachable.",
+        ota_no_answer: "No response from the device. Please reload the page.",
+        ota_err_wifi: "WiFi not connected",
+        ota_err_check: "Check failed",
+        ota_err_download: "Download failed",
+        ota_err_flash: "Flashing failed",
+        ota_err_checksum: "Checksum error (SHA256)",
+        ota_err_space: "Not enough free space",
+        ota_err_oled: "OLED menu active, please close it first",
+        ota_err_unknown: "Unknown error",
+        lang_button: "Language: English",
+    },
+};
+let LANG = "de";
+const t = (key) => (I18N[LANG] && I18N[LANG][key]) ||
+    I18N.de[key] ||
+    key;
+const applyI18n = () => {
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (key) {
+            el.textContent = t(key);
+        }
+    });
+    document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
+        const key = el.getAttribute("data-i18n-ph");
+        if (key) {
+            el.setAttribute("placeholder", t(key));
+        }
+    });
+    document.documentElement.setAttribute("lang", LANG);
+    const langLabel = document.querySelector("[gbs-language-label]");
+    if (langLabel) {
+        langLabel.textContent = t("lang_button");
+    }
+    // slot meta labels ("Leer"/"VERKLEINERT"/...) need a refresh in the new language
+    if (GBSControl.structs) {
+        updateSlotNames();
+    }
+    // the update status line is built from a key, so it can follow the language too
+    otaRenderMessage();
+};
+// Switch language: applies immediately client-side and (optionally) persists
+// it on the device so the OLED menu follows after the next restart.
+const setLang = (lang, persistToDevice) => {
+    LANG = lang;
+    GBSStorage.write("lang", lang);
+    applyI18n();
+    if (persistToDevice) {
+        fetch(`/lang/set?l=${lang}&${+new Date()}`).catch(() => { });
+    }
+};
 const Structs = {
     slots: [
         { name: "name", type: "string", size: 25 },
@@ -136,12 +522,30 @@ const GBSControl = {
         promptInput: null,
         hostnameInput: null,
         hostnameSaveButton: null,
+        languageToggleButton: null,
+        otaCurrent: null,
+        otaLatest: null,
+        otaCheckButton: null,
+        otaStartButton: null,
+        otaMessage: null,
+        otaBar: null,
+        otaBarFill: null,
     },
     updateTerminalTimer: 0,
     webSocketServerUrl: "",
     wifi: {
         mode: "ap",
         ssid: "",
+    },
+    ota: {
+        active: false,
+        confirmPending: false,
+        confirmTimer: 0,
+        deadline: 0,
+        mode: "check",
+        msgArg: "",
+        msgKey: "",
+        timer: 0,
     },
     ws: null,
     wsCheckTimer: 0,
@@ -411,10 +815,11 @@ const savePreset = () => {
     }
     const key = currentSlot.getAttribute("gbs-element-ref");
     const currentIndex = currentSlot.getAttribute("gbs-slot-id");
-    gbsPrompt("Slot-Namen vergeben", GBSControl.structs.slots[currentIndex].name || key)
+    gbsPrompt(t("prompt_slot_name"), GBSControl.structs.slots[currentIndex].name || key)
         .then((currentName) => {
-        if (currentName && currentName.trim() !== "Leer") {
+        if (currentName && currentName.trim() !== "Leer" && currentName.trim() !== "Empty") {
             currentSlot.setAttribute("gbs-name", currentName);
+            currentSlot.removeAttribute("gbs-empty");
             fetch(`/slot/save?index=${currentIndex}&name=${encodeURIComponent(currentName.substring(0, 24))}&${+new Date()}`).then(() => {
                 loadUser("4").then(() => {
                     setTimeout(() => {
@@ -482,7 +887,18 @@ const setSlot = (slot) => {
 const updateSlotNames = () => {
     for (let i = 0; i < GBSControl.maxSlots; i++) {
         const el = document.querySelector(`[gbs-slot-id="${i}"]`);
-        el.setAttribute("gbs-name", GBSControl.structs.slots[i].name);
+        // Empty slots come back as "Leer" from the device (EMPTY_SLOT_NAME). The label
+        // is translated for display; the gbs-empty attribute (not the translated text)
+        // lets the stylesheet show only the first empty slot.
+        const slotName = GBSControl.structs.slots[i].name;
+        const isEmpty = !slotName || slotName === "Leer" || slotName === "Empty";
+        el.setAttribute("gbs-name", isEmpty ? t("slot_empty") : slotName);
+        if (isEmpty) {
+            el.setAttribute("gbs-empty", "");
+        }
+        else {
+            el.removeAttribute("gbs-empty");
+        }
         el.setAttribute("gbs-meta", getSlotPresetName(parseInt(GBSControl.structs.slots[i].presetID, 10)));
     }
 };
@@ -516,7 +932,7 @@ const getSlotPresetName = (presetID) => {
             return "1920x1080";
         case 0x06:
         case 0x016:
-            return "VERKLEINERT";
+            return t("slot_meta_downscale");
         case 0x04:
             return "720x480";
         case 0x14:
@@ -530,7 +946,7 @@ const getSlotPresetName = (presetID) => {
         case 0x18:
             return "1024x768";
         default:
-            return "EIGEN";
+            return t("slot_meta_custom");
     }
 };
 const fetchSlotNamesErrorRetry = () => {
@@ -626,6 +1042,11 @@ const toggleButtonActive = (id) => (button, _index, _array) => {
     }
 };
 const displayWifiWarning = (mode) => {
+    // while a device-side online update runs, the websocket is dropped on
+    // purpose - do not scare the user with the connection warning
+    if (GBSControl.ota.active) {
+        mode = false;
+    }
     GBSControl.ui.webSocketConnectionWarning.style.display = mode
         ? "block"
         : "none";
@@ -713,7 +1134,7 @@ const doRestore = (file) => {
     const headerCheck = fileBuffer.slice(4, 6);
     if (headerCheck[0] !== 0x7b || headerCheck[1] !== 0x22) {
         backupInput.setAttribute("disabled", "");
-        gbsAlert("Ungültige Backup-Datei")
+        gbsAlert(t("alert_invalid_backup"))
             .then(() => {
             backupInput.removeAttribute("disabled");
         }, () => {
@@ -752,7 +1173,7 @@ const doRestore = (file) => {
     serial(funcs).then(() => {
         GBSControl.ui.progressRestore.setAttribute("gbs-progress", ``);
         loadUser("a").then(() => {
-            gbsAlert("GBSControl wird neu gestartet.\nBitte warten, bis WLAN wieder verbunden ist, dann OK klicken")
+            gbsAlert(t("alert_restore_reboot"))
                 .then(() => {
                 window.location.reload();
             })
@@ -791,7 +1212,7 @@ const wifiGetStatus = () => {
             GBSControl.ui.wifiApButton.classList.add("gbs-button__secondary");
             GBSControl.ui.wifiStaButton.removeAttribute("active", "");
             GBSControl.ui.wifiStaButton.classList.remove("gbs-button__secondary");
-            GBSControl.ui.wifiStaSSID.innerHTML = "STA | Netzwerk suchen";
+            GBSControl.ui.wifiStaSSID.innerHTML = t("wifi_sta_scanning");
         }
         else {
             GBSControl.ui.wifiApButton.removeAttribute("active", "");
@@ -817,7 +1238,7 @@ const hostnameSave = () => {
     if (!hn.length ||
         hn.length > 32 ||
         !/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(hn)) {
-        gbsAlert("Ungültiger Hostname. Nur Buchstaben, Ziffern und Bindestriche erlaubt (kein Bindestrich am Anfang/Ende, max. 32 Zeichen).");
+        gbsAlert(t("alert_invalid_hostname"));
         return;
     }
     const formData = new FormData();
@@ -825,13 +1246,291 @@ const hostnameSave = () => {
     fetch("/hostname/set", { method: "POST", body: formData })
         .then((r) => r.json())
         .then((data) => {
-        gbsAlert(`Hostname auf '${data.hostname}' gesetzt. GBSControl startet neu.\nNach dem Neustart erreichbar unter http://${data.hostname}.local/`)
+        gbsAlert(t("alert_hostname_set").split("{h}").join(data.hostname))
             .then(() => {
             window.location.href = `http://${data.hostname}.local/`;
         })
             .catch(() => { });
     })
         .catch(() => { });
+};
+/** firmware online update (runs on the device, triggered and polled from here) */
+const OTA_STATE_IDLE = 0;
+const OTA_STATE_CHECKING = 1;
+const OTA_STATE_UP_TO_DATE = 2;
+const OTA_STATE_UPDATE_AVAILABLE = 3;
+const OTA_STATE_DOWNLOADING = 4;
+const OTA_STATE_REBOOT_PENDING = 5;
+const OTA_STATE_ERROR = 6;
+// Error codes of /ota/status ("err"); keep in sync with WebOtaError in WebOta.h.
+// The device only sends the code, the text comes from the I18N dictionary.
+const otaErrorKey = (err) => {
+    switch (err) {
+        case 1:
+            return "ota_err_wifi";
+        case 2:
+            return "ota_err_check";
+        case 3:
+            return "ota_err_download";
+        case 4:
+            return "ota_err_flash";
+        case 5:
+            return "ota_err_checksum";
+        case 6:
+            return "ota_err_space";
+        case 7:
+            return "ota_err_oled";
+        default:
+            return "ota_err_unknown";
+    }
+};
+// The status line is stored as dictionary key (+ optional value for a
+// placeholder) and rendered from it, so it is translated when the language changes.
+const otaRenderMessage = () => {
+    const el = GBSControl.ui && GBSControl.ui.otaMessage;
+    if (!el) {
+        return;
+    }
+    const key = GBSControl.ota.msgKey;
+    el.textContent = key
+        ? t(key)
+            .split("{p}")
+            .join(GBSControl.ota.msgArg)
+            .split("{v}")
+            .join(GBSControl.ota.msgArg)
+        : "";
+};
+const otaSetMessage = (key, arg = "") => {
+    GBSControl.ota.msgKey = key;
+    GBSControl.ota.msgArg = arg;
+    otaRenderMessage();
+};
+const otaHideWsWarning = () => {
+    // the device drops websocket clients while updating - hide the banner early
+    GBSControl.ui.webSocketConnectionWarning.style.display = "none";
+};
+const otaSetButtons = (checkEnabled, startVisible) => {
+    if (checkEnabled) {
+        GBSControl.ui.otaCheckButton.removeAttribute("disabled");
+    }
+    else {
+        GBSControl.ui.otaCheckButton.setAttribute("disabled", "");
+    }
+    if (startVisible) {
+        GBSControl.ui.otaStartButton.removeAttribute("hidden");
+    }
+    else {
+        GBSControl.ui.otaStartButton.setAttribute("hidden", "");
+    }
+};
+const otaShowBar = (percent) => {
+    // percent === null -> indeterminate (no live values, e.g. ESP8266 update)
+    GBSControl.ui.otaBar.removeAttribute("hidden");
+    if (percent === null) {
+        GBSControl.ui.otaBar.classList.add("gbs-ota__bar--indeterminate");
+        GBSControl.ui.otaBarFill.style.width = "";
+    }
+    else {
+        GBSControl.ui.otaBar.classList.remove("gbs-ota__bar--indeterminate");
+        GBSControl.ui.otaBarFill.style.width = `${percent}%`;
+    }
+};
+const otaHideBar = () => {
+    GBSControl.ui.otaBar.setAttribute("hidden", "");
+    GBSControl.ui.otaBar.classList.remove("gbs-ota__bar--indeterminate");
+    GBSControl.ui.otaBarFill.style.width = "0%";
+};
+const otaStopPolling = () => {
+    if (GBSControl.ota.timer) {
+        clearTimeout(GBSControl.ota.timer);
+        GBSControl.ota.timer = 0;
+    }
+};
+const otaSchedulePoll = (delay) => {
+    otaStopPolling();
+    GBSControl.ota.timer = setTimeout(otaPoll, delay);
+};
+// Poll endpoint. Runs as long as an operation initiated from here is active.
+const otaPoll = () => {
+    if (!GBSControl.ota.active) {
+        return;
+    }
+    if (Date.now() > GBSControl.ota.deadline) {
+        otaStopPolling();
+        GBSControl.ota.active = false;
+        otaHideBar();
+        otaSetButtons(true, false);
+        otaSetMessage("ota_no_answer");
+        return;
+    }
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 4000);
+    fetch(`/ota/status?${+new Date()}`, { signal: controller.signal })
+        .then((response) => response.json())
+        .then((status) => {
+        clearTimeout(abortTimer);
+        otaHandleStatus(status);
+    })
+        .catch(() => {
+        clearTimeout(abortTimer);
+        // Expected while the ESP8266 updater runs: its web server is stopped.
+        if (GBSControl.ota.active) {
+            otaSetMessage(GBSControl.ota.mode === "update"
+                ? "ota_updating_lost"
+                : "ota_checking_lost");
+            if (GBSControl.ota.mode === "update") {
+                otaShowBar(null);
+            }
+            otaSchedulePoll(2500);
+        }
+    });
+};
+const otaFinish = (key, startVisible = false, arg = "") => {
+    otaStopPolling();
+    GBSControl.ota.active = false;
+    otaHideBar();
+    otaSetMessage(key, arg);
+    otaSetButtons(true, startVisible);
+};
+const otaHandleStatus = (status) => {
+    if (!GBSControl.ota.active) {
+        return;
+    }
+    if (status.current) {
+        GBSControl.ui.otaCurrent.textContent = status.current;
+    }
+    if (status.latest) {
+        GBSControl.ui.otaLatest.textContent = status.latest;
+    }
+    switch (status.state) {
+        case OTA_STATE_CHECKING:
+            otaSetMessage("ota_checking");
+            otaSetButtons(false, false);
+            otaSchedulePoll(2000);
+            break;
+        case OTA_STATE_DOWNLOADING:
+            if (status.progress > 0) {
+                otaSetMessage("ota_downloading_pct", String(status.progress));
+                otaShowBar(status.progress);
+            }
+            else {
+                otaSetMessage("ota_downloading");
+                otaShowBar(null);
+            }
+            otaSetButtons(false, false);
+            otaSchedulePoll(2000);
+            break;
+        case OTA_STATE_REBOOT_PENDING:
+            otaSetMessage("ota_reboot");
+            otaHideBar();
+            otaSetButtons(false, false);
+            // the device reboots on its own; keep polling until it answers again
+            GBSControl.ota.deadline = Date.now() + 120000;
+            otaSchedulePoll(2500);
+            break;
+        case OTA_STATE_UP_TO_DATE:
+            otaFinish("ota_up_to_date");
+            break;
+        case OTA_STATE_UPDATE_AVAILABLE:
+            otaFinish("ota_update_available", true);
+            break;
+        case OTA_STATE_ERROR:
+            otaFinish(otaErrorKey(status.err));
+            break;
+        default:
+            // IDLE: a fresh boot answered - the device restarted (e.g. after an
+            // update) and forgot the OTA state. Show the new version and reload.
+            otaFinish("ota_back", false, status.current || "?");
+            setTimeout(() => window.location.reload(), 2000);
+            break;
+    }
+};
+const otaCheck = () => {
+    otaSetMessage("ota_checking");
+    otaSetButtons(false, false);
+    GBSControl.ui.otaLatest.textContent = "–";
+    fetch(`/ota/check?${+new Date()}`)
+        .then((response) => response.json())
+        .then((data) => {
+        if (!data.started) {
+            otaSetButtons(true, false);
+            otaSetMessage("ota_busy");
+            return;
+        }
+        GBSControl.ota.active = true;
+        GBSControl.ota.mode = "check";
+        GBSControl.ota.deadline = Date.now() + 90000;
+        otaHideWsWarning();
+        otaSchedulePoll(2500);
+    })
+        .catch(() => {
+        otaSetButtons(true, false);
+        otaSetMessage("ota_unreachable");
+    });
+};
+const otaStart = () => {
+    // two-step confirm, comparable to ENTER on the OLED update screen
+    if (!GBSControl.ota.confirmPending) {
+        GBSControl.ota.confirmPending = true;
+        otaSetMessage("ota_confirm");
+        GBSControl.ota.confirmTimer = window.setTimeout(() => {
+            GBSControl.ota.confirmPending = false;
+            otaSetMessage("");
+        }, 5000);
+        return;
+    }
+    clearTimeout(GBSControl.ota.confirmTimer);
+    GBSControl.ota.confirmPending = false;
+    otaSetMessage("ota_starting");
+    otaSetButtons(false, false);
+    otaShowBar(null);
+    fetch(`/ota/update?${+new Date()}`)
+        .then((response) => response.json())
+        .then((data) => {
+        if (!data.started) {
+            otaFinish("ota_busy");
+            return;
+        }
+        GBSControl.ota.active = true;
+        GBSControl.ota.mode = "update";
+        GBSControl.ota.deadline = Date.now() + 360000;
+        otaHideWsWarning();
+        otaSchedulePoll(2500);
+    })
+        .catch(() => {
+        otaFinish("ota_unreachable");
+    });
+};
+const initOta = () => {
+    fetch(`/ota/status?${+new Date()}`)
+        .then((response) => response.json())
+        .then((status) => {
+        if (status.current) {
+            GBSControl.ui.otaCurrent.textContent = status.current;
+        }
+        if (status.latest) {
+            GBSControl.ui.otaLatest.textContent = status.latest;
+        }
+        if (status.state === OTA_STATE_UPDATE_AVAILABLE) {
+            otaSetMessage("ota_update_available");
+            otaSetButtons(true, true);
+        }
+        else if (status.state === OTA_STATE_REBOOT_PENDING) {
+            // page was (re)loaded while the device is about to restart
+            GBSControl.ota.active = true;
+            GBSControl.ota.mode = "update";
+            GBSControl.ota.deadline = Date.now() + 120000;
+            otaHideWsWarning();
+            otaSetMessage("ota_reboot");
+            otaSchedulePoll(2500);
+        }
+        else if (status.state === OTA_STATE_ERROR) {
+            otaSetMessage(otaErrorKey(status.err));
+        }
+    })
+        .catch(() => {
+        GBSControl.ui.otaCurrent.textContent = "–";
+    });
 };
 const wifiConnect = () => {
     const ssid = GBSControl.ui.wifiSSDInput.value;
@@ -847,7 +1546,7 @@ const wifiConnect = () => {
         method: "POST",
         body: formData,
     }).then(() => {
-        gbsAlert(`GBSControl startet neu und verbindet sich mit ${ssid}. Bitte einige Sekunden warten und dann OK drücken`)
+        gbsAlert(t("alert_wifi_reboot").split("{ssid}").join(ssid))
             .then(() => {
             window.location.href = "http://gbscontrol.local/";
         })
@@ -864,7 +1563,7 @@ const wifiScanSSID = () => {
     };
     if (!GBSControl.scanSSIDDone) {
         GBSControl.scanSSIDRetries = 0;
-        showWiFiStatusRow("Suche läuft...");
+        showWiFiStatusRow(t("wifi_scanning"));
         fetch(`/wifi/list?${+new Date()}`).then(() => {
             GBSControl.scanSSIDDone = true;
             setTimeout(wifiScanSSID, 3000);
@@ -877,7 +1576,7 @@ const wifiScanSSID = () => {
         // Some scans can take longer than 3s; keep polling a few times if empty.
         if (!result.length && GBSControl.scanSSIDRetries < 10) {
             GBSControl.scanSSIDRetries++;
-            showWiFiStatusRow("Suche läuft...");
+            showWiFiStatusRow(t("wifi_scanning"));
             setTimeout(wifiScanSSID, 1000);
             return null;
         }
@@ -914,7 +1613,7 @@ const wifiScanSSID = () => {
             GBSControl.ui.wifiConnect.setAttribute("hidden", "");
         }
         else {
-            GBSControl.ui.wifiListTable.innerHTML = `<tr><td colspan="3" style="text-align:center;opacity:.8">Keine Netzwerke gefunden</td></tr>`;
+            GBSControl.ui.wifiListTable.innerHTML = `<tr><td colspan="3" style="text-align:center;opacity:.8">${t("wifi_no_networks")}</td></tr>`;
         }
     });
 };
@@ -935,7 +1634,7 @@ const wifiSetAPMode = () => {
         method: "POST",
         body: formData,
     }).then(() => {
-        gbsAlert("Wechsle in den AP-Modus. Bitte mit der SSID \"gbscontrol\" verbinden und dann OK klicken")
+        gbsAlert(t("alert_ap_mode"))
             .then(() => {
             window.location.href = "http://192.168.4.1";
         })
@@ -1017,7 +1716,7 @@ const initGBSButtons = () => {
         const peakingBtn = document.querySelector('[gbs-message="8"][gbs-message-type="user"]');
         if (!peakingBtn)
             return;
-        const labels = ['Peaking: Aus', 'Peaking: Normal', 'Peaking: Stark', 'Peaking: Max'];
+        const labels = () => [t('peak_off'), t('peak_normal'), t('peak_strong'), t('peak_max')];
         const STORAGE_KEY = 'gbsc_peaking_level';
         // Initial-Guess aus localStorage, Fallback 1 (Normal)
         let stored = parseInt((_a = localStorage.getItem(STORAGE_KEY)) !== null && _a !== void 0 ? _a : '1', 10);
@@ -1027,7 +1726,7 @@ const initGBSButtons = () => {
         const updateLabel = () => {
             const divs = peakingBtn.querySelectorAll('div');
             if (divs.length >= 2) {
-                divs[1].textContent = labels[level];
+                divs[1].textContent = labels()[level];
             }
             peakingBtn.setAttribute('gbs-peaking-level', String(level));
         };
@@ -1126,9 +1825,18 @@ const initUIElements = () => {
         promptInput: document.querySelector('[gbs-input="prompt-input"]'),
         hostnameInput: document.querySelector('[gbs-input="hostname"]'),
         hostnameSaveButton: document.querySelector("[gbs-hostname-save]"),
+        languageToggleButton: document.querySelector("[gbs-language-toggle]"),
+        otaCurrent: document.querySelector("[gbs-ota-current]"),
+        otaLatest: document.querySelector("[gbs-ota-latest]"),
+        otaCheckButton: document.querySelector("[gbs-ota-check]"),
+        otaStartButton: document.querySelector("[gbs-ota-start]"),
+        otaMessage: document.querySelector("[gbs-ota-message]"),
+        otaBar: document.querySelector("[gbs-ota-bar]"),
+        otaBarFill: document.querySelector("[gbs-ota-bar-fill]"),
     };
 };
 const initGeneralListeners = () => {
+    var _a;
     window.addEventListener("resize", () => {
         updateViewPort();
     });
@@ -1143,6 +1851,11 @@ const initGeneralListeners = () => {
     GBSControl.ui.wifiApButton.addEventListener("click", wifiSetAPMode);
     GBSControl.ui.wifiStaButton.addEventListener("click", wifiScanSSID);
     GBSControl.ui.hostnameSaveButton.addEventListener("click", hostnameSave);
+    GBSControl.ui.otaCheckButton.addEventListener("click", otaCheck);
+    GBSControl.ui.otaStartButton.addEventListener("click", otaStart);
+    (_a = GBSControl.ui.languageToggleButton) === null || _a === void 0 ? void 0 : _a.addEventListener("click", () => {
+        setLang(LANG === "en" ? "de" : "en", true);
+    });
     GBSControl.ui.developerSwitch.addEventListener("click", toggleDeveloperMode);
     GBSControl.ui.customSlotFilters.addEventListener("click", toggleCustomSlotFilters);
     GBSControl.ui.alertOk.addEventListener("click", () => {
@@ -1253,6 +1966,7 @@ const initUI = () => {
     initUnloadListener();
     initDeveloperMode();
     initHelp();
+    initOta();
 };
 const main = () => {
     const ip = location.hostname;
@@ -1263,6 +1977,23 @@ const main = () => {
         .setAttribute("src", document.head
         .querySelector('[rel="apple-touch-icon"]')
         .getAttribute("href"));
+    // UI language: the value stored in the browser is the immediate fallback, then
+    // the device is asked as the source of truth (/status/get returns "lang"; the
+    // OLED menu follows the same setting after the next restart).
+    LANG = GBSStorage.read("lang") === "en" ? "en" : "de";
+    applyI18n();
+    fetch(`/status/get?${+new Date()}`)
+        .then((r) => r.json())
+        .then((status) => {
+        if (status.lang === "en" || status.lang === "de") {
+            if (status.lang !== LANG) {
+                LANG = status.lang;
+                GBSStorage.write("lang", LANG);
+                applyI18n();
+            }
+        }
+    })
+        .catch(() => { });
     fetchSlotNamesAndInit();
 };
 main();

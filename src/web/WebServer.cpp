@@ -2,6 +2,7 @@
 #include "../core/Globals.h"
 #include "../web/SerialMirror.h"
 #include "../web/WebSocketHandler.h" // webSocketEventHandler
+#include "../web/WebOta.h"
 #include "../config/WiFiConfig.h"
 #include "../storage/PreferencesManager.h"
 #include "../video/Scanlines.h"
@@ -21,6 +22,9 @@
 
 // Empty string for WiFi.begin() when no password
 static const String emptyWiFiPassword = "";
+
+// Firmware version for /ota/status (defined in gbs-control.ino via FirmwareVersion.h)
+extern const char *FIRMWARE_VERSION;
 
 // ETag for the embedded web UI served on "/" (backport from upstream 55cd933,
 // adapted). The page is ~170 kB, so the browser is told to cache it and only
@@ -596,9 +600,10 @@ void startWebserver()
         char buf[224];
 #ifdef ESP8266
         snprintf_P(buf, sizeof(buf),
-            PSTR("{\"heap\":%u,\"heapFrag\":%u,\"maxBlock\":%u,\"uptime\":%lu,\"wsClients\":%d,\"resetReason\":\"%s\"}"),
+            PSTR("{\"heap\":%u,\"heapFrag\":%u,\"maxBlock\":%u,\"uptime\":%lu,\"wsClients\":%d,\"resetReason\":\"%s\",\"lang\":\"%s\"}"),
             ESP.getFreeHeap(), ESP.getHeapFragmentation(), ESP.getMaxFreeBlockSize(),
-            millis() / 1000, webSocket.connectedClients(), ESP.getResetReason().c_str());
+            millis() / 1000, webSocket.connectedClients(), ESP.getResetReason().c_str(),
+            uopt->menuLanguage == 1 ? "en" : "de");
 #else
         // ESP32's EspClass has no getHeapFragmentation()/getMaxFreeBlockSize()/getResetReason()
         // equivalents in the Arduino core; report what the IDF heap allocator and reset-reason
@@ -616,11 +621,38 @@ void startWebserver()
             default: break;
         }
         snprintf_P(buf, sizeof(buf),
-            PSTR("{\"heap\":%u,\"heapFrag\":%u,\"maxBlock\":%u,\"uptime\":%lu,\"wsClients\":%d,\"resetReason\":\"%s\"}"),
+            PSTR("{\"heap\":%u,\"heapFrag\":%u,\"maxBlock\":%u,\"uptime\":%lu,\"wsClients\":%d,\"resetReason\":\"%s\",\"lang\":\"%s\"}"),
             (unsigned)ESP.getFreeHeap(), (unsigned)0, (unsigned)ESP.getMaxAllocHeap(),
-            millis() / 1000, webSocket.connectedClients(), resetReasonStr);
+            millis() / 1000, webSocket.connectedClients(), resetReasonStr,
+            uopt->menuLanguage == 1 ? "en" : "de");
 #endif
         request->send(200, "application/json", buf);
+    });
+
+    server.on("/ota/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Deliberately without the free heap gate (same reasoning as /status/get):
+        // this is the endpoint the web UI polls while an online update runs, and
+        // it must stay readable exactly when heap is tight.
+        char buf[224];
+        snprintf_P(buf, sizeof(buf),
+            PSTR("{\"state\":%u,\"progress\":%u,\"err\":%u,\"current\":\"%s\",\"latest\":\"%s\"}"),
+            (unsigned)webOtaStatus.state, (unsigned)webOtaStatus.progress,
+            (unsigned)webOtaStatus.err, FIRMWARE_VERSION, webOtaStatus.latestVersion);
+        request->send(200, "application/json", buf);
+    });
+
+    server.on("/ota/check", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Only latches the request; the check itself runs in loop() context
+        // (webOtaProcess) with the web services suspended, like the OLED flow.
+        bool started = webOtaRequest(WEB_OTA_ACTION_CHECK);
+        request->send(200, "application/json", started ? "{\"started\":true}" : "{\"started\":false}");
+    });
+
+    server.on("/ota/update", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Same latch pattern as /ota/check. performUpdate() itself refuses to
+        // run without a preceding successful check (FirmwareUpdater guard).
+        bool started = webOtaRequest(WEB_OTA_ACTION_UPDATE);
+        request->send(200, "application/json", started ? "{\"started\":true}" : "{\"started\":false}");
     });
 
     server.on("/gbs/restore-filters", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -631,6 +663,24 @@ void startWebserver()
         } else {
             request->send(200, "application/json", "false");
         }
+    });
+
+    // Device language switch (WebUI): stores uopt->menuLanguage (#22) so the OLED
+    // menu picks it up after the next restart. The WebUI applies its own translation
+    // immediately client-side. Saving the preferences (LittleFS) belongs in the
+    // loop() context, not in the async task, so only the command is queued here
+    // (handled by handleType2Command(), same as /gbs/restore-filters).
+    server.on("/lang/set", HTTP_GET, [](AsyncWebServerRequest *request) {
+        bool result = false;
+        if (request->hasParam("l")) {
+            String l = request->getParam("l")->value();
+            if (l == "en" || l == "1") {
+                result = userCommandQueue.push('I');
+            } else if (l == "de" || l == "0") {
+                result = userCommandQueue.push('J');
+            }
+        }
+        request->send(200, "application/json", result ? "true" : "false");
     });
 
     //webSocket.onEvent(webSocketEvent);

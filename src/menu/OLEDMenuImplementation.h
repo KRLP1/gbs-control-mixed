@@ -28,5 +28,6 @@ bool currentSettingHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMen
 bool wifiMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav nav, bool isFirstTime);
 bool OSDHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav nav, bool isFirstTime);
 bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav nav, bool isFirstTime);
+bool languageMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav nav, bool isFirstTime);
 void initOLEDMenu();
 #endif

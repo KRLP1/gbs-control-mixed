@@ -8,6 +8,7 @@
 #include <LittleFS.h>
 #include <ESPAsyncWebServer.h>
 #include "OLEDMenuImplementation.h"
+#include "OLEDMenuStrings.h"
 #include "OTAUpdate.h"
 #include "../wifi/WiFiManager.h"
 #include "../core/options.h"
@@ -57,7 +58,7 @@ bool resolutionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMen
     display->drawString(OLED_MENU_WIDTH / 2, 16, item->str);
     display->setFont(DejaVu_Sans_Mono_12);
     display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
-    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Geladen");
+    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_LOADED));
     display->display();
     uint8_t videoMode = getVideoMode();
     PresetPreference preset = PresetPreference::Output1080P;
@@ -137,7 +138,7 @@ bool presetSelectionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
     display->drawString(OLED_MENU_WIDTH / 2, 16, item->str);
     display->setFont(DejaVu_Sans_Mono_12);
     display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
-    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Geladen");
+    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_LOADED));
     display->display();
     // item->tag = Slot-Index (0..71), nicht das Slot-Zeichen
     if (item->tag >= slotIndexMap.length()) {
@@ -216,11 +217,11 @@ bool presetsCreationMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
     }
 
     if (tooManySlots) {
-        manager->registerItem(item, 0, "Bitte WebUI nutzen, um auf weitere Presets zuzugreifen.");
+        manager->registerItem(item, 0, oledMsg(MSG_TOO_MANY_PRESETS));
     }
 
     if (!item->numSubItem) {
-        manager->registerItem(item, 0, "Keine Presets. Bitte zuerst über die Web-UI eins anlegen.");
+        manager->registerItem(item, 0, oledMsg(MSG_NO_PRESETS));
     }
 
     return true;
@@ -244,18 +245,18 @@ bool resetMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav,
     display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
     switch (item->tag) {
         case MT_RESET_GBS:
-            display->drawString(OLED_MENU_WIDTH / 2, 16, "GBS zurücksetzen");
-            display->drawString(OLED_MENU_WIDTH / 2, 31, "Bitte warten");
+            display->drawString(OLED_MENU_WIDTH / 2, 16, oledMsg(MSG_RESETTING_GBS));
+            display->drawString(OLED_MENU_WIDTH / 2, 31, oledMsg(MSG_PLEASE_WAIT));
             display->drawString(OLED_MENU_WIDTH / 2, 46, "...");
             break;
         case MT_RESTORE_FACTORY:
-            display->drawString(OLED_MENU_WIDTH / 2, 16, "Werksreset");
-            display->drawString(OLED_MENU_WIDTH / 2, 31, "Bitte warten");
+            display->drawString(OLED_MENU_WIDTH / 2, 16, oledMsg(MSG_RESETTING_FACTORY));
+            display->drawString(OLED_MENU_WIDTH / 2, 31, oledMsg(MSG_PLEASE_WAIT));
             display->drawString(OLED_MENU_WIDTH / 2, 46, "...");
             break;
         case MT_RESET_WIFI:
-            display->drawString(OLED_MENU_WIDTH / 2, 16, "WLAN zurücksetzen");
-            display->drawString(OLED_MENU_WIDTH / 2, 31, "Bitte warten");
+            display->drawString(OLED_MENU_WIDTH / 2, 16, oledMsg(MSG_RESETTING_WIFI));
+            display->drawString(OLED_MENU_WIDTH / 2, 31, oledMsg(MSG_PLEASE_WAIT));
             display->drawString(OLED_MENU_WIDTH / 2, 46, "...");
             break;
     }
@@ -313,9 +314,8 @@ bool currentSettingHandler(OLEDMenuManager *manager, OLEDMenuItem *, OLEDMenuNav
         }
         display.setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
         display.setFont(DejaVu_Sans_Mono_12);
-        display.drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Kein Signal");
+        display.drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_NO_INPUT));
     } else {
-        // TODO translations
         boolean vsyncActive = 0;
         boolean hsyncActive = 0;
         float ofr = getOutputFrameRate();
@@ -382,27 +382,27 @@ bool wifiMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav, 
         sprintf(ssid, "SSID: %s", WiFi.SSID().c_str());
         manager->registerItem(item, 0, ssid);
         if (WiFi.isConnected()) {
-            manager->registerItem(item, 0, "Status: Verbunden");
-            manager->registerItem(item, 0, "Für die Web-UI eine der folgenden URLs verwenden");
+            manager->registerItem(item, 0, oledMsg(MSG_STATUS_CONNECTED));
+            manager->registerItem(item, 0, oledMsg(MSG_WIFI_URL));
             sprintf(ip, "http://%s", WiFi.localIP().toString().c_str());
             manager->registerItem(item, 0, ip);
             snprintf(domain, sizeof(domain), "http://%s.local", device_hostname.c_str());
             manager->registerItem(item, 0, domain);
         } else {
             // shouldn't happen?
-            manager->registerItem(item, 0, "Status: Getrennt");
+            manager->registerItem(item, 0, oledMsg(MSG_STATUS_DISCONNECTED));
         }
     } else if (wifiMode == WIFI_AP) {
-        manager->registerItem(item, 0, "Vor Nutzung der Web-UI mit folgender SSID (Passwort) verbinden");
+        manager->registerItem(item, 0, oledMsg(MSG_WIFI_AP_INFO));
         sprintf(ssid, "SSID: %s (%s)", ap_ssid, ap_password);
         manager->registerItem(item, 0, ssid);
-        manager->registerItem(item, 0, "Für die Web-UI eine der folgenden URLs verwenden");
+        manager->registerItem(item, 0, oledMsg(MSG_WIFI_URL));
         manager->registerItem(item, 0, "http://192.168.4.1");
         snprintf(domain, sizeof(domain), "http://%s.local", device_hostname.c_str());
         manager->registerItem(item, 0, domain);
     } else {
         // shouldn't happen?
-        manager->registerItem(item, 0, "Status: Getrennt");
+        manager->registerItem(item, 0, oledMsg(MSG_STATUS_DISCONNECTED));
     }
     return true;
 }
@@ -478,9 +478,69 @@ bool systemMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav
     manager->registerItem(item, 0, versionText);
     
     // Add "Check for Update" button
-    manager->registerItem(item, MT_CHECK_UPDATE, "Nach Update suchen", firmwareUpdateMenuHandler);
+    manager->registerItem(item, MT_CHECK_UPDATE, oledMsg(MSG_CHECK_UPDATE), firmwareUpdateMenuHandler);
+
+    // Language submenu: rotate to select Deutsch/English, press to confirm.
+    // The choice is saved and the device restarts at once, so the whole menu
+    // tree is rebuilt in the new language (initOLEDMenu runs after the
+    // preferences are loaded). Default font, like the other System menu items.
+    OLEDMenuItem *langMenu = manager->registerItem(item, MT_NULL, oledMsg(MSG_MENU_LANGUAGE));
+    // tag 0 = German, tag 1 = English
+    manager->registerItem(langMenu, 0, oledMsg(MSG_LANG_GERMAN), languageMenuHandler);
+    manager->registerItem(langMenu, 1, oledMsg(MSG_LANG_ENGLISH), languageMenuHandler);
     
     return true;
+}
+
+// Language menu handler: item->tag selects the language (0 = German, 1 = English).
+// Saving the preference and restarting right away applies it to OLED menu,
+// status bar and WebUI (the latter reads the setting via /status/get). Selecting
+// the already active language neither saves nor restarts.
+bool languageMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav, bool isFirstTime)
+{
+    if (!isFirstTime) {
+        return false;
+    }
+
+    uint8_t newLang = item->tag ? 1 : 0;
+
+    // Early out when this language is already active: no need to rewrite the
+    // preferences or reboot. oledMenuLanguage() has to match as well, not just
+    // uopt->menuLanguage: a change queued from the web UI is already stored in
+    // uopt, but the OLED menu only picks it up after a restart, so the restart
+    // below is still needed to apply it.
+    if (newLang == oledMenuLanguage() && newLang == uopt->menuLanguage) {
+        OLEDDisplay *display = manager->getDisplay();
+        display->clear();
+        display->setColor(OLEDDISPLAY_COLOR::WHITE);
+        display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
+        display->setFont(ArialMT_Plain_16);
+        display->drawString(OLED_MENU_WIDTH / 2, 14, newLang ? "English" : "Deutsch");
+        display->setFont(DejaVu_Sans_Mono_12);
+        display->drawString(OLED_MENU_WIDTH / 2, 36, oledMsg(MSG_ALREADY_ACTIVE));
+        display->display();
+        delay(600);
+        return false;
+    }
+
+    OLEDDisplay *display = manager->getDisplay();
+    display->clear();
+    display->setColor(OLEDDISPLAY_COLOR::WHITE);
+    display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
+    display->setFont(ArialMT_Plain_16);
+    display->drawString(OLED_MENU_WIDTH / 2, 14, newLang ? "English" : "Deutsch");
+    display->setFont(DejaVu_Sans_Mono_12);
+    display->drawString(OLED_MENU_WIDTH / 2, 36, oledMsg(MSG_REBOOTING));
+    display->display();
+
+    uopt->menuLanguage = newLang;
+    saveUserPrefs();
+
+    // disconnect the WebSocket clients cleanly, wait a moment, then restart
+    webSocket.disconnect();
+    delay(400);
+    ESP.restart();
+    return false;
 }
 
 // Firmware update menu handler
@@ -543,7 +603,7 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
     
     switch (updateState) {
         case STATE_CHECKING:
-            display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Prüfe...");
+            display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_CHECKING));
             display->display();
             
             // Check for update
@@ -561,11 +621,11 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
             if (updateStatus == FirmwareUpdater::UP_TO_DATE) {
                 // The version is already shown in the menu; a second line here
                 // overlapped the text (both were drawn at about the same height).
-                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Aktuell!");
+                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_UP_TO_DATE));
             } else if (updateStatus == FirmwareUpdater::WIFI_NOT_CONNECTED) {
-                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "WLAN getrennt");
+                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_WIFI_DISCONNECTED));
             } else {
-                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Prüfung fehlg.");
+                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_CHECK_FAILED));
             }
             display->display();
             
@@ -591,15 +651,15 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
         case STATE_CONFIRM_UPDATE:
             display->setFont(DejaVu_Sans_Mono_12);
             display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
-            display->drawString(OLED_MENU_WIDTH / 2, 0, "Update gefunden!");
+            display->drawString(OLED_MENU_WIDTH / 2, 0, oledMsg(MSG_UPDATE_FOUND));
             display->setFont(ArialMT_Plain_10);
             display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_LEFT);
-            display->drawString(0, 18, String("Aktuell: ") + String(FIRMWARE_VERSION));
-            display->drawString(0, 30, String("Neueste: ") + latestVersion);
+            display->drawString(0, 18, String(oledMsg(MSG_CURRENT_VERSION)) + String(FIRMWARE_VERSION));
+            display->drawString(0, 30, String(oledMsg(MSG_LATEST_VERSION)) + latestVersion);
             display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
             display->setFont(ArialMT_Plain_10);
             display->drawString(OLED_MENU_WIDTH / 2, 44, "ENTER = Update");
-            display->drawString(OLED_MENU_WIDTH / 2, 54, "DOWN = Abbrechen");
+            display->drawString(OLED_MENU_WIDTH / 2, 54, oledMsg(MSG_DOWN_CANCEL));
             display->display();
             
             if (nav == OLEDMenuNav::ENTER) {
@@ -626,7 +686,7 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
             if (millis() - stateStartTime < 500) {
                 display->setFont(DejaVu_Sans_Mono_12);
                 display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
-                display->drawString(OLED_MENU_WIDTH / 2, 10, "Lade herunter...");
+                display->drawString(OLED_MENU_WIDTH / 2, 10, oledMsg(MSG_DOWNLOADING));
                 display->setFont(ArialMT_Plain_10);
                 
                 // Draw initial progress bar
@@ -657,7 +717,7 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
                     display->setColor(OLEDDISPLAY_COLOR::WHITE);
                     display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
                     display->setFont(DejaVu_Sans_Mono_12);
-                    display->drawString(OLED_MENU_WIDTH / 2, 10, "Lade herunter...");
+                    display->drawString(OLED_MENU_WIDTH / 2, 10, oledMsg(MSG_DOWNLOADING));
                     display->setFont(ArialMT_Plain_10);
                     
                     // Draw progress bar
@@ -698,7 +758,7 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
                 display->setColor(OLEDDISPLAY_COLOR::WHITE);
                 display->setFont(DejaVu_Sans_Mono_12);
                 display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
-                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Neustart...");
+                display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_REBOOTING));
                 display->display();
                 delay(500);
                 ESP.restart();
@@ -713,8 +773,8 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
             display->drawString(OLED_MENU_WIDTH / 2, 0, "Update OK!");
             display->setFont(ArialMT_Plain_10);
             
-            char countdownText[32];
-            sprintf(countdownText, "Neustart in %d...", remainingSeconds);
+            char countdownText[40];
+            snprintf(countdownText, sizeof(countdownText), oledMsg(MSG_REBOOT_IN), remainingSeconds);
             display->drawString(OLED_MENU_WIDTH / 2, 35, countdownText);
             display->display();
             break;
@@ -729,28 +789,28 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
             // Display specific error message based on update status
             switch (updateStatus) {
                 case FirmwareUpdater::WIFI_NOT_CONNECTED:
-                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "WLAN getrennt");
+                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_WIFI_DISCONNECTED));
                     break;
                 case FirmwareUpdater::CHECK_FAILED:
-                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Prüfung fehlg.");
+                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_CHECK_FAILED));
                     break;
                 case FirmwareUpdater::DOWNLOAD_FAILED:
-                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Download fehlg.");
+                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_DOWNLOAD_FAILED));
                     break;
                 case FirmwareUpdater::FLASH_FAILED:
-                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, "Flash fehlg.");
+                    display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_FLASH_FAILED));
                     break;
                 case FirmwareUpdater::CHECKSUM_FAILED:
-                    display->drawString(OLED_MENU_WIDTH / 2, 16, "Prüfsummenfehler");
-                    display->drawString(OLED_MENU_WIDTH / 2, 31, "SHA256 falsch");
+                    display->drawString(OLED_MENU_WIDTH / 2, 16, oledMsg(MSG_CHECKSUM_ERROR));
+                    display->drawString(OLED_MENU_WIDTH / 2, 31, oledMsg(MSG_SHA256_WRONG));
                     break;
                 case FirmwareUpdater::INSUFFICIENT_SPACE:
-                    display->drawString(OLED_MENU_WIDTH / 2, 16, "Nicht genug Platz");
-                    display->drawString(OLED_MENU_WIDTH / 2, 31, "Freier Speicher");
+                    display->drawString(OLED_MENU_WIDTH / 2, 16, oledMsg(MSG_NO_SPACE));
+                    display->drawString(OLED_MENU_WIDTH / 2, 31, oledMsg(MSG_FREE_MEM));
                     break;
                 default:
-                    display->drawString(OLED_MENU_WIDTH / 2, 16, "Update fehlg.");
-                    display->drawString(OLED_MENU_WIDTH / 2, 31, "Unbek. Fehler");
+                    display->drawString(OLED_MENU_WIDTH / 2, 16, oledMsg(MSG_UPDATE_FAILED));
+                    display->drawString(OLED_MENU_WIDTH / 2, 31, oledMsg(MSG_UNKNOWN_ERROR));
                     break;
             }
             display->display();
@@ -780,37 +840,38 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
 
 void initOLEDMenu()
 {
+    oledStringsInit(); // fix the menu language (preferences are loaded by now)
     OLEDMenuItem *root = oledMenu.rootItem;
 
     // OSD Menu
-    oledMenu.registerItem(root, MT_NULL, "OSD-Menü öffnen", osdMenuHanlder, DejaVu_Sans_Mono_10);
+    oledMenu.registerItem(root, MT_NULL, oledMsg(MSG_MENU_OSD), osdMenuHanlder, DejaVu_Sans_Mono_10);
 
     // Resolutions
-    OLEDMenuItem *resMenu = oledMenu.registerItem(root, MT_NULL, "Auflösungen", nullptr, DejaVu_Sans_Mono_10);
+    OLEDMenuItem *resMenu = oledMenu.registerItem(root, MT_NULL, oledMsg(MSG_MENU_RESOLUTIONS), nullptr, DejaVu_Sans_Mono_10);
     const char *resolutions[7] = {"1280x960", "1280x1024", "1280x720", "1920x1080", "1080p 4:3", "1024x768", "480/576"};
     uint8_t tags[7] = {MT_1280x960, MT1280x1024, MT1280x720, MT1920x1080, MT1080x960W, MT_1024x768, MT_480s576};
     for (int i = 0; i < 7; ++i) {
         oledMenu.registerItem(resMenu, tags[i], resolutions[i], resolutionMenuHandler);
     }
     // downscale and passthrough
-    oledMenu.registerItem(resMenu, MT_DOWNSCALE, "Verkleinern", resolutionMenuHandler);
-    oledMenu.registerItem(resMenu, MT_BYPASS, "Durchleitung", resolutionMenuHandler);
+    oledMenu.registerItem(resMenu, MT_DOWNSCALE, oledMsg(MSG_MENU_DOWNSCALE), resolutionMenuHandler);
+    oledMenu.registerItem(resMenu, MT_BYPASS, oledMsg(MSG_MENU_PASSTHROUGH), resolutionMenuHandler);
 
     // Presets
-    oledMenu.registerItem(root, MT_NULL, "Presets", presetsCreationMenuHandler, DejaVu_Sans_Mono_10);
+    oledMenu.registerItem(root, MT_NULL, oledMsg(MSG_MENU_PRESETS), presetsCreationMenuHandler, DejaVu_Sans_Mono_10);
 
     // WiFi
-    oledMenu.registerItem(root, MT_NULL, "WLAN-Info", wifiMenuHandler, DejaVu_Sans_Mono_10);
+    oledMenu.registerItem(root, MT_NULL, oledMsg(MSG_MENU_WIFI), wifiMenuHandler, DejaVu_Sans_Mono_10);
 
     // Current Settings
-    oledMenu.registerItem(root, MT_NULL, "Aktuelle Ausgabe", currentSettingHandler, DejaVu_Sans_Mono_10);
+    oledMenu.registerItem(root, MT_NULL, oledMsg(MSG_MENU_CURRENT), currentSettingHandler, DejaVu_Sans_Mono_10);
 
-    // System (contains firmware version and update check)
-    oledMenu.registerItem(root, MT_NULL, "System", systemMenuHandler, DejaVu_Sans_Mono_10);
+    // System (contains firmware version, update check and language)
+    oledMenu.registerItem(root, MT_NULL, oledMsg(MSG_MENU_SYSTEM), systemMenuHandler, DejaVu_Sans_Mono_10);
 
     // Reset (Misc.)
-    OLEDMenuItem *resetMenu = oledMenu.registerItem(root, MT_NULL, "Zurücksetzen", nullptr, DejaVu_Sans_Mono_10);
-    oledMenu.registerItem(resetMenu, MT_RESET_GBS, "GBS zurücksetzen", resetMenuHandler, DejaVu_Sans_Mono_10);
-    oledMenu.registerItem(resetMenu, MT_RESTORE_FACTORY, "Werkseinstellungen", resetMenuHandler, DejaVu_Sans_Mono_10);
-    oledMenu.registerItem(resetMenu, MT_RESET_WIFI, "WLAN-Verbindungen löschen", resetMenuHandler, DejaVu_Sans_Mono_10);
+    OLEDMenuItem *resetMenu = oledMenu.registerItem(root, MT_NULL, oledMsg(MSG_MENU_RESET), nullptr, DejaVu_Sans_Mono_10);
+    oledMenu.registerItem(resetMenu, MT_RESET_GBS, oledMsg(MSG_MENU_RESET_GBS), resetMenuHandler, DejaVu_Sans_Mono_10);
+    oledMenu.registerItem(resetMenu, MT_RESTORE_FACTORY, oledMsg(MSG_MENU_FACTORY), resetMenuHandler, DejaVu_Sans_Mono_10);
+    oledMenu.registerItem(resetMenu, MT_RESET_WIFI, oledMsg(MSG_MENU_RESET_WIFI), resetMenuHandler, DejaVu_Sans_Mono_10);
 }
