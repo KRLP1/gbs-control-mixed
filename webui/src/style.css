@@ -705,6 +705,17 @@ section[name="alert"] {
 /** online update (system page) */
 .gbs-ota__tile {
   cursor: default;
+  /* display-only tile: muted colors, unlike real buttons, so it doesn't
+     look clickable */
+  border: 1px dashed rgba(var(--color-primary-rgba), 0.1);
+  color: var(--color-silver-chalice);
+}
+
+.gbs-ota__tile:hover {
+  /* don't inherit the button hover effect (border/glow comes from .gbs-button:hover) */
+  border: 1px dashed rgba(var(--color-primary-rgba), 0.1);
+  box-shadow: none;
+  color: var(--color-silver-chalice);
 }
 
 .gbs-ota__message {
@@ -715,6 +726,21 @@ section[name="alert"] {
   padding: 8px 2px 0 2px;
   width: 100%;
   word-break: break-word;
+}
+
+/* result highlighting (set by otaRenderMessage) */
+.gbs-ota__message--ok {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.gbs-ota__message--error {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.gbs-ota__message--warn {
+  color: var(--color-secondary);
 }
 
 .gbs-ota__bar {

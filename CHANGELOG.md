@@ -1,5 +1,36 @@
 # Changelog
 
+## [v1.7.1] – WebUI OTA feedback fixes
+
+### Fixed
+
+- **"Available" tile stayed empty after an "Up to date" check**: when
+  the firmware was already current, the GitHub release version was
+  looked up but discarded — `webOtaStatus.latestVersion` was only
+  populated in the `UPDATE_AVAILABLE` branch of `webOtaProcess()`,
+  not in the `UP_TO_DATE` branch. The "Available:" tile in the WebUI
+  therefore kept showing "-" and the check looked like nothing had
+  happened. The version is now copied in both branches.
+- **OTA status messages were invisible**: the result line was
+  rendered in the same muted gray as the surrounding UI, so
+  success / error / hint feedback got lost. Added color-coded
+  message classes in `otaRenderMessage()`:
+  - success (`ota_up_to_date`, `ota_update_available`,
+    `ota_reboot`, `ota_back`) — primary blue, bold
+  - error (`ota_err_*`, `ota_unreachable`, `ota_no_answer`) —
+    warning red, bold
+  - hint (`ota_busy`, `ota_confirm`) — secondary yellow
+- **OTA display tile looked clickable**: the read-only "Available:" /
+  "Installed:" tiles (`.gbs-ota__tile`) inherited the button hover
+  glow from `.gbs-button:hover`, which made them look interactive
+  even though `cursor: default` was already set. Added an explicit
+  dashed muted border and a `:hover` override that suppresses the
+  glow, so the tiles read as display-only.
+
+### Changed
+
+- `FirmwareVersion.h` bumped to `1.7.1`.
+
 ## [v1.7.0] – WebUI Online Update + Bilingual UI + OLED
 
 ### Added

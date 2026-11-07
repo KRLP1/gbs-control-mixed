@@ -1508,6 +1508,29 @@ const otaRenderMessage = () => {
         .split("{v}")
         .join(GBSControl.ota.msgArg)
     : "";
+  // Highlight the result so the feedback doesn't get lost in the gray
+  // line: success = blue, error = red, hint = yellow.
+  el.classList.remove(
+    "gbs-ota__message--ok",
+    "gbs-ota__message--error",
+    "gbs-ota__message--warn"
+  );
+  if (
+    key === "ota_up_to_date" ||
+    key === "ota_update_available" ||
+    key === "ota_reboot" ||
+    key === "ota_back"
+  ) {
+    el.classList.add("gbs-ota__message--ok");
+  } else if (
+    key.startsWith("ota_err_") ||
+    key === "ota_unreachable" ||
+    key === "ota_no_answer"
+  ) {
+    el.classList.add("gbs-ota__message--error");
+  } else if (key === "ota_busy" || key === "ota_confirm") {
+    el.classList.add("gbs-ota__message--warn");
+  }
 };
 
 const otaSetMessage = (key: string, arg = "") => {

@@ -132,6 +132,12 @@ void webOtaProcess()
             webOtaStatus.latestVersion[sizeof(webOtaStatus.latestVersion) - 1] = '\0';
             webOtaStatus.state = WEB_OTA_UPDATE_AVAILABLE;
         } else if (result == FirmwareUpdater::UP_TO_DATE) {
+            // Also report the found version when "up to date": the WebUI uses
+            // it to fill the "Available:" tile. Without this, the tile keeps
+            // showing "-" and the check looks like nothing happened.
+            strncpy(webOtaStatus.latestVersion, latestVersion.c_str(),
+                    sizeof(webOtaStatus.latestVersion) - 1);
+            webOtaStatus.latestVersion[sizeof(webOtaStatus.latestVersion) - 1] = '\0';
             webOtaStatus.state = WEB_OTA_UP_TO_DATE;
         } else {
             webOtaSetResult(result);
