@@ -1,19 +1,34 @@
 # gbs-control-mixed
 
+## What is this?
+
+`gbs-control-mixed` is alternative firmware for the **GBS-C** video
+upscaler (TV5725 chip), found on GBS-8200 / GBS-8220 boards. It
+turns the bare scaler into a feature-rich upscaler with a web
+interface, OLED menu, automatic mode detection and OTA firmware
+updates — controlled from an ESP8266 or ESP32 that replaces the
+original control MCU.
+
+**Key features:**
+- Bilingual German / English OLED menu and WebUI
+- OTA firmware updates via WebUI or OLED menu (no serial terminal
+  needed after the initial flash)
+- Automatic mode detection with plausibility watchdog
+  (recovers from stuck-MD after format switches)
+- PAL and NTSC support
+- Output resolutions: 480i, 576i, 720p, 960p, 960p windowbox,
+  1024×768, 1280×1024, 1920×1080
+- PlatformIO build (no Arduino IDE needed)
+
 ## About This Fork
 
-This fork combines [Kwakx/gbs-control-nx](https://github.com/Kwakx/gbs-control-nx) v1.4.0
-with fixes from [JuergenLeber/gbs-control](https://github.com/JuergenLeber/gbs-control),
-ported **as far as possible**, plus a German user interface.
+This fork is based on gbs-control-nx v1.4.0 with additional fixes and features for
+the GBS-C (TV5725) upscaler (ESP8266/ESP32).
 
 - **Base:** [gbs-control-nx](https://github.com/Kwakx/gbs-control-nx) v1.4.0 — the modular
   ESP8266/ESP32 codebase with web interface, OTA updates and OLED menu
-- **Fixes:** sync/clamp stability, preset slot handling, Atari ST high-res monochrome
-  support and more from [JuergenLeber/gbs-control](https://github.com/JuergenLeber/gbs-control)
-  (see [CHANGELOG.md](CHANGELOG.md))
-- **UI:** German OLED menu and German web interface
-
-Note: the user interface (OLED menu and web interface) is in German.
+- **Fixes:** For details, see [CHANGELOG.md](CHANGELOG.md)
+- **UI:** Bilingual German / English OLED menu and web interface
 
 **Latest releases available at:** https://github.com/KRLP1/gbs-control-mixed/releases
 
@@ -28,14 +43,25 @@ Note: the user interface (OLED menu and web interface) is in German.
 
 For pin connections and wiring information, see **[PINOUT.md](PINOUT.md)**.
 
+## Tested Hardware
+
+Tested with the following source consoles:
+- Nintendo NES
+- Super Nintendo (SNES)
+- Nintendo 64
+- PlayStation 1
+- Sega Saturn
+- PC-Engine
+
+
 ## ⚠️ Backup & AI Notice
 
 **Make a backup before flashing!** Presets and settings are stored on the device — a full
 flash erase will delete them.
 
-The porting work in this fork was done with AI assistance. The firmware compiles and has
-been tested on real hardware, but it is provided **as-is, without any warranty — use at
-your own risk.**
+The porting work in this fork was done with AI assistance.
+The firmware compiles and has been tested on real hardware  but it is provided
+**as-is, without any warranty — use at your own risk.**
 
 ## Building and Installation
 
@@ -71,10 +97,35 @@ development environment:
 Alternatively, download a prebuilt binary from the
 [releases](https://github.com/KRLP1/gbs-control-mixed/releases): `firmware.bin` for ESP8266
 boards, `firmware_esp32.bin` for ESP32 boards. Flash the file matching your board with
-your preferred tool. Online updates from the device check this repository.
+your preferred tool.
 
 For detailed PlatformIO documentation, visit:
 https://docs.platformio.org/en/latest/integration/ide/vscode.html#installation
+
+## Firmware Updates (OTA)
+
+Once the firmware is running, future updates can be installed
+directly from the WebUI or OLED menu — no computer or serial
+connection needed (except for the very first flash).
+
+1. Connect the device to WiFi (initial setup via serial or AP mode)
+2. Open the WebUI in a browser, or use the OLED menu
+3. WebUI: System → Online-Update; OLED: navigate to the online
+   update entry
+4. Check for a newer release
+5. If an update is available, start it
+6. On ESP8266 the device reboots and flashes in boot mode (full
+   heap, resume on power loss); on ESP32 the download runs directly
+   in the running firmware.
+7. The WebUI page auto-reloads after the reboot.
+
+The device always verifies the SHA256 checksum before applying the
+new firmware.
+
+**Note:** the v1.7.1 release has a broken OTA implementation on
+ESP8266 (OOM during download). Updating from v1.7.1 to v1.7.2
+requires flashing via PC (PlatformIO). After v1.7.2 is installed,
+future updates work via WebUI or OLED again.
 
 ## Credits & Thanks
 

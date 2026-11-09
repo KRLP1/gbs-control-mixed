@@ -1,5 +1,84 @@
 # Changelog
 
+## [v1.7.2] – Robust OTA updates (boot updater on ESP8266)
+
+> **Important:** the v1.7.1 release has a broken OTA implementation
+> on ESP8266 (OOM during download). Updating from v1.7.1 to v1.7.2
+> requires flashing via PC (PlatformIO). After v1.7.2 is installed,
+> future updates work via WebUI or OLED again.
+
+### Added
+
+- **Boot-time update mode (ESP8266)**: an OTA request from the WebUI
+  or OLED menu arms a record in RTC user memory and restarts the
+  device. The download and flash then run early in `setup()` —
+  before the web server, OLED menu tree and presets claim their
+  memory — with the full unfragmented boot heap. Progress is shown
+  on the OLED (percentage + bar) and on serial. The boot record is
+  consumed on first read, so a crash during the download can never
+  cause a reboot loop.
+- **Chunked download with HTTP Range requests**: the firmware image
+  is fetched from release-assets.githubusercontent.com in 32 KB
+  chunks instead of a single streaming connection, so progress
+  survives connections the CDN closes mid-transfer.
+- **Cross-reboot resume**: the download position is tracked in a
+  flash watermark sector. If the device loses power or reboots
+  mid-download, the boot updater validates the watermark and
+  resumes where it stopped, with the SHA256 computation continued
+  over the already-flashed bytes.
+- **TLS heap probe**: before every connect, the updater models the
+  exact BearSSL/lwIP allocations of `connect()` and aborts cleanly
+  instead of OOM-crashing when they do not fit. MFLN negotiation
+  shrinks the record buffers where the CDN supports it.
+- **WebUI boot-update state (state 7)**: bilingual message, poll
+  window extended to 20 minutes, detection of a page reload during
+  the boot update.
+- **OLED menu integration**: the online update entry arms the boot
+  update and shows a "Rebooting" notice before the restart.
+
+### Fixed
+
+- **Update download OOM on the ESP8266**: with all web services
+  torn down, only ~15.7 KB remained free — not enough for the
+  BearSSL stack plus the 4 KB updater flash buffer, so the first
+  chunk aborted with an OOM exception. The download now runs in
+  the boot updater where the heap suffices; the ESP32 keeps the
+  direct runtime download (its heap is large enough).
+- **False "Update erfolgreich! / Update successful!" in the WebUI**:
+  the UI reported success at the moment the device merely *accepted*
+  the update request, before a single byte had arrived. The new
+  `WEB_OTA_BOOT_UPDATE_PENDING` state reports honestly what is
+  happening; success is only shown after the new firmware is
+  actually installed.
+- **Soft WDT during in-place update checks**: after tearing the
+  services down, the async TCP stack still served queued websocket
+  frames and TCP close handshakes from the SYS context, churning
+  lwIP pbufs on the heap the check's TLS handshake needed. A 2.5 s
+  drain delay plus the heap gate that moves the check to boot fix
+  this.
+- **Two unnecessary heap duplications removed**: the signed CDN
+  path (~800 bytes per connect) and the pre-resolved CDN URL
+  (~900 bytes for the whole download) are no longer held twice on
+  the heap.
+
+### Changed
+
+- **Progress-aware retry budget**: download attempts that made
+  progress since the last boot get 24 retries, attempts without
+  progress 10; every boot starts with a fresh budget.
+- **OTA serial log tidied**: high-frequency download diagnostics
+  (per-chunk offsets, TLS state, heap telemetry, buffer escalation)
+  compile in only when `OTA_LOG_VERBOSE=1` in
+  `src/menu/OTAUpdate.cpp`. The default log shows boot and release
+  info, one line per 10 % progress, error paths and the SHA256
+  verdict.
+- **Streaming release-JSON parser**: size, SHA256 digest and
+  download URL are scanned sequentially from the GitHub API stream,
+  so the full JSON is never buffered (no OOM on the ESP8266).
+- **README rewritten**: bilingual UI, OTA firmware updates and
+  tested hardware documented.
+- `FIRMWARE_VERSION` bumped to `v1.7.2`.
+
 ## [v1.7.1] – WebUI OTA feedback fixes
 
 ### Fixed

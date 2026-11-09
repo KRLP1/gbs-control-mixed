@@ -11,7 +11,12 @@ enum WebOtaState : uint8_t {
     WEB_OTA_UPDATE_AVAILABLE = 3, // last check: newer release found
     WEB_OTA_DOWNLOADING = 4,      // firmware download/flash in progress
     WEB_OTA_REBOOT_PENDING = 5,   // flash ok, device is about to restart
-    WEB_OTA_ERROR = 6             // last operation failed (see message)
+    WEB_OTA_ERROR = 6,            // last operation failed (see message)
+    WEB_OTA_BOOT_UPDATE_PENDING = 7 // update accepted; the device restarts
+                                  // FIRST and downloads/flashes afterwards
+                                  // in the boot updater (ESP8266). Nothing is
+                                  // written yet when this state is reported,
+                                  // so the UI must not claim success here
 };
 
 // Failure reasons reported by /ota/status in the "err" field (valid while the

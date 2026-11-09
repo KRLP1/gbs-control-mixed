@@ -701,6 +701,22 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
             }
             
             if (downloadProgress == 0) {
+#ifdef ESP8266
+                // ESP8266: the TLS download does not fit into the runtime
+                // heap next to the web services (see the block comment in
+                // OTAUpdate.cpp). Arm the boot update and restart; the
+                // download then runs early in setup() with progress on the
+                // OLED, and the device reboots into the new firmware.
+                display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
+                display->setFont(DejaVu_Sans_Mono_12);
+                display->drawString(OLED_MENU_WIDTH / 2, 50, oledMsg(MSG_REBOOTING));
+                display->display();
+                Serial.println(F("[Menu] Rebooting into boot update"));
+                FirmwareUpdater::requestBootUpdate();
+                delay(800);
+                ESP.restart();
+                return false; // not reached
+#else
                 // Set static pointers for callback (safe during update as only one update at a time)
                 static OLEDMenuManager* callbackManager = nullptr;
                 static int* callbackProgress = nullptr;
@@ -743,6 +759,7 @@ bool firmwareUpdateMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLE
                     updateState = STATE_ERROR;
                     stateStartTime = millis();
                 }
+#endif
             }
             break;
         }

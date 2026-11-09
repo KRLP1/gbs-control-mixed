@@ -268,6 +268,127 @@ void applyWindowbox960(uint8_t videoMode)
         (unsigned)GBS::VDS_VSCALE::read());
 }
 
+// ---------------------------------------------------------------------------
+// Boot-time online update (ESP8266)
+//
+// The runtime heap is too small to run the TLS download next to the web
+// services (see the block comment in src/menu/OTAUpdate.cpp), so an update
+// requested from the WebUI or the OLED menu only arms a flag and restarts.
+// Early in setup() - after the boot logo, before web server, OLED menu tree
+// and presets claim their memory - the heap is big enough: the download runs
+// with progress on the OLED and over serial, then the device reboots into
+// the new firmware. On failure the normal boot continues and the WebUI OTA
+// tile reports the error.
+// ---------------------------------------------------------------------------
+#ifdef ESP8266
+static void otaBootUpdateProgress(int progress)
+{
+    display.clear();
+    display.setColor(OLEDDISPLAY_COLOR::WHITE);
+    display.setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
+    // Library fonts only (ThingPulse): the DejaVu_Sans_Mono_* arrays live in
+    // src/data/fonts.h and src/menu/OLEDMenuFonts.h, which are included only
+    // in OLEDMenuImplementation.cpp / OLEDMenuManager.cpp (const arrays with
+    // internal linkage) - they are not visible in this translation unit.
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(display.width() / 2, 6, "Online-Update");
+    display.setFont(ArialMT_Plain_16);
+    char pct[10];
+    snprintf(pct, sizeof(pct), "%u %%", (unsigned)progress);
+    display.drawString(display.width() / 2, 24, pct);
+    display.drawRect(14, 46, 100, 10);
+    if (progress > 0) {
+        display.fillRect(16, 48, (96 * progress) / 100, 6);
+    }
+    display.display();
+}
+
+static void otaRunBootUpdateIfPending()
+{
+    bool bootUpdate = FirmwareUpdater::bootUpdatePending();
+    // An update check that crashed mid-flight left its RTC flag armed: re-run
+    // it here, in the same clean boot environment the boot update downloads
+    // in (web services not started yet). checkInterruptedPending() consumes
+    // the flag and bounds the auto-recovery; it never runs alongside a boot
+    // update (the boot record wins and the flag stays for the next boot).
+    bool checkRecovery = !bootUpdate && FirmwareUpdater::checkInterruptedPending();
+    if (!bootUpdate && !checkRecovery) {
+        return;
+    }
+
+    if (bootUpdate) {
+        SerialM.println(F("[OTA] Boot update pending"));
+    } else {
+        SerialM.println(F("[OTA] Check was interrupted by a reset - recovering"));
+    }
+
+    // PersWiFiManager is not running yet this early in setup(); start a plain
+    // STA connection with the stored credentials. The later boot stages see
+    // an already connected station and continue normally.
+    WiFi.hostname(device_hostname);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin();
+
+    SerialM.println(F("[OTA] Waiting for WiFi..."));
+    unsigned long wifiStart = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 25000UL) {
+        delay(100);
+    }
+
+    FirmwareUpdater::UpdateStatus result = FirmwareUpdater::WIFI_NOT_CONNECTED;
+    if (WiFi.status() == WL_CONNECTED) {
+        if (bootUpdate) {
+            result = FirmwareUpdater::runBootUpdate(otaBootUpdateProgress);
+        } else {
+            // Recovery check: same call the WebUI action runs, but on the
+            // fresh boot heap with no web services competing for it. The
+            // result lands in the OTA tile as if the user's click had gone
+            // through (the version is filled for UPDATE_AVAILABLE and
+            // UP_TO_DATE, before the state is published - see WebOta.h).
+            String latestVersion;
+            result = FirmwareUpdater::checkForUpdate(latestVersion);
+            if (result == FirmwareUpdater::UPDATE_AVAILABLE
+                || result == FirmwareUpdater::UP_TO_DATE) {
+                strncpy(webOtaStatus.latestVersion, latestVersion.c_str(),
+                        sizeof(webOtaStatus.latestVersion) - 1);
+                webOtaStatus.latestVersion[sizeof(webOtaStatus.latestVersion) - 1] = '\0';
+            }
+        }
+    } else {
+        SerialM.println(F("[OTA] No WiFi, boot update skipped"));
+    }
+
+    if (result == FirmwareUpdater::SUCCESS) {
+        ESP.restart();  // fallback; runBootUpdate() restarts on its own
+        return;
+    }
+
+    // Keep the outcome visible in the WebUI OTA tile after the normal boot.
+    webOtaStatus.progress = 0;
+    if (result == FirmwareUpdater::UPDATE_AVAILABLE) {
+        webOtaStatus.state = WEB_OTA_UPDATE_AVAILABLE;
+    } else if (result == FirmwareUpdater::UP_TO_DATE) {
+        webOtaStatus.state = WEB_OTA_UP_TO_DATE;
+    } else {
+        switch (result) {
+            case FirmwareUpdater::WIFI_NOT_CONNECTED:
+                webOtaStatus.err = WEB_OTA_ERR_WIFI; break;
+            case FirmwareUpdater::CHECK_FAILED:
+                webOtaStatus.err = WEB_OTA_ERR_CHECK; break;
+            case FirmwareUpdater::FLASH_FAILED:
+                webOtaStatus.err = WEB_OTA_ERR_FLASH; break;
+            case FirmwareUpdater::CHECKSUM_FAILED:
+                webOtaStatus.err = WEB_OTA_ERR_CHECKSUM; break;
+            case FirmwareUpdater::INSUFFICIENT_SPACE:
+                webOtaStatus.err = WEB_OTA_ERR_SPACE; break;
+            default:
+                webOtaStatus.err = WEB_OTA_ERR_DOWNLOAD; break;
+        }
+        webOtaStatus.state = WEB_OTA_ERROR;
+    }
+}
+#endif
+
 void setup()
 {
     display.init();                 //inits OLED on I2C bus
@@ -444,6 +565,14 @@ void setup()
         delay(1);
     }
     display.clear();
+
+#ifdef ESP8266
+    // Boot-time online update: runs before the web services and the OLED
+    // menu tree take their share of the heap (see otaRunBootUpdateIfPending
+    // above). No-op on a normal boot.
+    otaRunBootUpdateIfPending();
+#endif
+
     // if i2c established and chip running, issue software reset now
     GBS::RESET_CONTROL_0x46::write(0);
     GBS::RESET_CONTROL_0x47::write(0);

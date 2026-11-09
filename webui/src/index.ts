@@ -161,6 +161,7 @@ const I18N = {
     ota_downloading: "Download läuft …",
     ota_downloading_pct: "Download läuft … {p}%",
     ota_reboot: "Update erfolgreich! Das Gerät startet jetzt neu …",
+    ota_boot_pending: "Update wird gestartet: das Gerät startet neu und flasht die Firmware anschließend im Boot-Modus …",
     ota_up_to_date: "Firmware ist aktuell",
     ota_update_available: "Neue Firmware verfügbar",
     ota_confirm: "Bitte erneut drücken, um das Update zu starten …",
@@ -333,6 +334,7 @@ const I18N = {
     ota_downloading: "Downloading …",
     ota_downloading_pct: "Downloading … {p}%",
     ota_reboot: "Update successful! The device is restarting now …",
+    ota_boot_pending: "Update starting: the device restarts now and flashes the firmware in boot mode afterwards …",
     ota_up_to_date: "Firmware is up to date",
     ota_update_available: "New firmware available",
     ota_confirm: "Press again to start the update …",
@@ -1469,6 +1471,9 @@ const OTA_STATE_UPDATE_AVAILABLE = 3;
 const OTA_STATE_DOWNLOADING = 4;
 const OTA_STATE_REBOOT_PENDING = 5;
 const OTA_STATE_ERROR = 6;
+// 7 = the ESP8266 accepted the update and restarts FIRST; download and flash
+// run in the boot updater afterwards. The UI must NOT report success here.
+const OTA_STATE_BOOT_UPDATE_PENDING = 7;
 
 // Error codes of /ota/status ("err"); keep in sync with WebOtaError in WebOta.h.
 // The device only sends the code, the text comes from the I18N dictionary.
@@ -1519,6 +1524,7 @@ const otaRenderMessage = () => {
     key === "ota_up_to_date" ||
     key === "ota_update_available" ||
     key === "ota_reboot" ||
+    key === "ota_boot_pending" ||
     key === "ota_back"
   ) {
     el.classList.add("gbs-ota__message--ok");
@@ -1670,6 +1676,18 @@ const otaHandleStatus = (status: any) => {
       GBSControl.ota.deadline = Date.now() + 120000;
       otaSchedulePoll(2500);
       break;
+    case OTA_STATE_BOOT_UPDATE_PENDING:
+      // ESP8266: nothing is flashed yet - the device restarts and the boot
+      // updater does the download/flash (incl. clean retries) while offline.
+      // The "update runs" notice shows as soon as the polls start failing.
+      otaSetMessage("ota_boot_pending");
+      otaShowBar(null);
+      otaSetButtons(false, false);
+      // clean retries (fresh boot heap per attempt) can stretch the whole
+      // boot update past 10 minutes - the poll deadline must cover that
+      GBSControl.ota.deadline = Date.now() + 1200000;
+      otaSchedulePoll(2500);
+      break;
     case OTA_STATE_UP_TO_DATE:
       otaFinish("ota_up_to_date");
       break;
@@ -1738,7 +1756,10 @@ const otaStart = () => {
       }
       GBSControl.ota.active = true;
       GBSControl.ota.mode = "update";
-      GBSControl.ota.deadline = Date.now() + 360000;
+      // the ESP8266 boot update runs offline and may need several clean
+      // retries (each a fresh boot + WiFi + partial download); 20 minutes
+      // covers the worst case seen so far (5 attempts, 2026-11-08 log)
+      GBSControl.ota.deadline = Date.now() + 1200000;
       otaHideWsWarning();
       otaSchedulePoll(2500);
     })
@@ -1767,6 +1788,15 @@ const initOta = () => {
         GBSControl.ota.deadline = Date.now() + 120000;
         otaHideWsWarning();
         otaSetMessage("ota_reboot");
+        otaSchedulePoll(2500);
+      } else if (status.state === OTA_STATE_BOOT_UPDATE_PENDING) {
+        // page was (re)loaded during the reboot into the boot updater
+        GBSControl.ota.active = true;
+        GBSControl.ota.mode = "update";
+        GBSControl.ota.deadline = Date.now() + 1200000;
+        otaHideWsWarning();
+        otaSetMessage("ota_boot_pending");
+        otaShowBar(null);
         otaSchedulePoll(2500);
       } else if (status.state === OTA_STATE_ERROR) {
         otaSetMessage(otaErrorKey(status.err));

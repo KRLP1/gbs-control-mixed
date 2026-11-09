@@ -15,7 +15,7 @@ bool webOtaRequest(uint8_t action)
     }
     uint8_t state = webOtaStatus.state;
     if (state == WEB_OTA_CHECKING || state == WEB_OTA_DOWNLOADING ||
-        state == WEB_OTA_REBOOT_PENDING) {
+        state == WEB_OTA_REBOOT_PENDING || state == WEB_OTA_BOOT_UPDATE_PENDING) {
         return false;
     }
     webOtaAction = action;
@@ -35,6 +35,7 @@ static void webOtaSetResult(FirmwareUpdater::UpdateStatus status)
             err = WEB_OTA_ERR_CHECK;
             break;
         case FirmwareUpdater::DOWNLOAD_FAILED:
+        case FirmwareUpdater::HEAP_EXHAUSTED:   // no separate WebUI text; the serial log has details
             err = WEB_OTA_ERR_DOWNLOAD;
             break;
         case FirmwareUpdater::FLASH_FAILED:
@@ -81,6 +82,33 @@ void webOtaProcess()
 
     SerialM.println(isUpdate ? F("[WebOTA] update requested") : F("[WebOTA] check requested"));
 
+#ifdef ESP8266
+    if (isUpdate) {
+        // The TLS download does not fit into the runtime heap next to the web
+        // services: the BearSSL stack alone needs ~11 KB (6.2 KB stack thunk
+        // + 3.4 KB client context + 1.5 KB x509 validator + record buffers)
+        // and the updater holds another 4 KB flash sector buffer, but only
+        // ~15.7 KB are free even with the services torn down - the device
+        // aborted with an OOM exception on the first chunk. Arm the boot
+        // update and restart instead; the download runs early in setup()
+        // (gbs-control.ino) with the full boot heap. The ESP32 keeps the
+        // direct runtime download below.
+        // State note: at this point NOTHING has been downloaded or flashed -
+        // the report to the UI must be the boot-update-pending state, not the
+        // "flashed ok" REBOOT_PENDING (the 2026-11-07 WebUI screenshots showed
+        // "Update erfolgreich!" before a single byte had arrived, then the
+        // honest "Update läuft ..." after the restart).
+        SerialM.println(F("[WebOTA] Rebooting into boot update"));
+        webOtaStatus.state = WEB_OTA_BOOT_UPDATE_PENDING;
+        FirmwareUpdater::requestBootUpdate();
+        // Give the UI time to pick up the BOOT_UPDATE_PENDING state before
+        // restart; the device is offline while the boot update downloads.
+        delay(5000);
+        ESP.restart();
+        return;
+    }
+#endif
+
     // Let the HTTP response for the triggering request flush before the
     // async server goes away (delay() services the SYS context on ESP8266).
     delay(1500);
@@ -92,8 +120,49 @@ void webOtaProcess()
 #ifdef ESP8266
     server.end();
 #endif
-    delay(1000);
+    // The async TCP stack still serves the browser's open connections from
+    // the SYS context for a while after end(): queued websocket frames, TCP
+    // close handshakes, the tab's immediate reconnect attempts. All of that
+    // churns LWIP pbufs on the very heap the TLS handshake below needs. Give
+    // it time to drain before carving the heap up (the 2026-11-08 10:17 log
+    // shows what happens without enough of it: soft WDT in SYS context,
+    // pbuf_alloc under ethernet_input -> AsyncClient::add -> tcp_write, and
+    // the check never returns). delay() services the SYS context.
+    delay(2500);
     yield();
+
+#ifdef ESP8266
+    if (!isUpdate) {
+        // Heap gate for the in-place check. With the video pipeline running
+        // there is not enough contiguous heap left for the check's TLS
+        // handshake next to the async TCP stack: both in-place checks of
+        // 2026-11-08 (10:17 and 11:51, ~14.9-15.0 KB free at this point)
+        // died in a soft WDT reset in SYS context, even with the 2.5 s
+        // drain time above, and only the crash recovery saved the result.
+        // Take that reboot deliberately instead: arm the boot check,
+        // restart, and let setup() run the check in the clean boot
+        // environment (~22 KB free there, both recovery checks of
+        // 2026-11-08 succeeded). The WebUI rides the restart out as a brief
+        // connection loss while "checking", then the result lands in the
+        // OTA tile as usual.
+        static const uint32_t OTA_CHECK_MIN_FREE_HEAP = 18000;
+        static const uint32_t OTA_CHECK_MIN_MAX_BLOCK = 12000;
+        uint32_t checkFreeHeap = ESP.getFreeHeap();
+        uint32_t checkMaxBlock = ESP.getMaxFreeBlockSize();
+        if (checkFreeHeap < OTA_CHECK_MIN_FREE_HEAP || checkMaxBlock < OTA_CHECK_MIN_MAX_BLOCK) {
+            SerialM.print(F("[WebOTA] Heap too low for an in-place check (free "));
+            SerialM.print((unsigned long)checkFreeHeap);
+            SerialM.print(F(", max block "));
+            SerialM.print((unsigned long)checkMaxBlock);
+            SerialM.println(F("), rebooting into the boot check"));
+            FirmwareUpdater::armCheckOnBoot();
+            // The /ota/check response is long since flushed (4 s of delays
+            // above); this margin only covers a slow browser ACK.
+            delay(2000);
+            ESP.restart();
+        }
+    }
+#endif
 
     FirmwareUpdater::UpdateStatus result;
 
