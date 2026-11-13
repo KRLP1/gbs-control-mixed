@@ -1,5 +1,49 @@
 # Changelog
 
+## [v1.7.3] – 960p windowbox for progressive inputs + pinned library versions
+
+### Added
+
+- **960p windowbox calibration for 576p progressive PAL input
+  (videoMode 4)**: the EDTV input values set by `doPostPresetLoadSteps()`
+  for the 1080p preset (IF_HB_ST2 = 1216, IF_HB_SP2 = 200,
+  IF_HBIN_SP = 64) belong to PLLAD_MD = 2553. At the windowbox
+  PLLAD_MD = 2249 the IF line is only (2249 + 1) / 2 = 1125 units
+  long, so IF_HB_ST2 = 1216 lies behind the end of the line and the
+  picture breaks up. The values are now scaled by 2249 / 2553 to keep
+  the stock window at the same place within the line: IF_HB_ST2 = 1071,
+  IF_HB_SP2 = 176, IF_HBIN_SP = 56. Vertical: the 15 kHz values
+  (VSCALE 479, IF_VB 60/62) cropped the 576p picture; VSCALE 515 and
+  IF_VB 42/44 show the complete picture. An interference bar right of
+  the picture is hidden by VDS_DIS_HB_ST = 1196 instead of 1258.
+  Field-measured (2026-11).
+- **960p windowbox calibration for 480p progressive NTSC input
+  (videoMode 3)**: with PLLAD_MD = 2491 and IF_HBIN_SP = 146, the
+  right ~1.2 cm of a 480p picture was missing. IF_HB_ST2 = 1190 and
+  IF_HB_SP2 = 152 show the complete picture. Field-measured
+  (2026-11).
+
+### Fixed
+
+- **`applyBestHTotal()` overwrote the 960p windowbox VDS_HB_ST**: the
+  function rewrites VDS_HB_ST as 0.971 × VDS_DIS_HB_ST whenever
+  VDS_HB_ST is larger than VDS_DIS_HB_ST. For preset 0x07 with 576p
+  input this is deliberate — VDS_HB_ST = 1258 hides an interference
+  bar that VDS_DIS_HB_ST = 1196 alone cannot suppress, and a lower
+  VDS_HB_ST caused fine noise spikes and a rolling interference line.
+  A `keepWindowboxHbSt` guard now skips the rewrite for preset 0x07,
+  so the windowbox calibration survives `applyBestHTotal()`.
+
+### Changed
+
+- **Library versions pinned to exact releases** in platformio.ini for
+  reproducible builds: ESPAsyncTCP 2.0.0, ESPAsyncWebServer 3.12.1,
+  AsyncTCP 3.5.0, SSD1306 OLED driver 4.6.2. Previously used caret
+  ranges (`^x.y.z`) which silently picked up newer minor releases.
+  ESPAsyncWebServer bumped from 3.10.3 to 3.12.1, AsyncTCP from
+  3.4.10 to 3.5.0.
+- `FIRMWARE_VERSION` bumped to `v1.7.3`.
+
 ## [v1.7.2] – Robust OTA updates (boot updater on ESP8266)
 
 > **Important:** the v1.7.1 release has a broken OTA implementation

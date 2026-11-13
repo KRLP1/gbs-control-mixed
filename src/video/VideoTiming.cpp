@@ -532,7 +532,11 @@ boolean applyBestHTotal(uint16_t bestHTotal)
         //Serial.println("overflow h_blank_display_stop_position");
         h_blank_display_stop_position = bestHTotal * 0.178f;
     }
-    if ((h_blank_memory_start_position > bestHTotal) || (h_blank_memory_start_position > h_blank_display_start_position) || isLargeDiff) {
+    // 960p windowbox (preset 0x07, 576p input) deliberately keeps VDS_HB_ST above
+    // VDS_DIS_HB_ST: the display mask hides an interference bar, while a lower
+    // VDS_HB_ST causes noise. Do not rewrite it as 0.971 * VDS_DIS_HB_ST there.
+    boolean keepWindowboxHbSt = (rto->presetID == 0x07);
+    if ((h_blank_memory_start_position > bestHTotal) || (h_blank_memory_start_position > h_blank_display_start_position && !keepWindowboxHbSt) || isLargeDiff) {
         //Serial.println("overflow h_blank_memory_start_position");
         h_blank_memory_start_position = h_blank_display_start_position * 0.971f;
     }

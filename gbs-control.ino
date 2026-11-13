@@ -186,12 +186,46 @@ void applyWindowbox960(uint8_t videoMode)
         // PLLAD_MD change.
         GBS::IF_HBIN_SP::write(208);
 
+        // Progressive PAL input (576p, videoMode 4): doPostPresetLoadSteps() has
+        // just applied the stock EDTV input window for the 1080p preset
+        // (IF_HB_ST2 = 1216, IF_HB_SP2 = 200, IF_HBIN_SP = 64). Those values
+        // belong to PLLAD_MD = 2553. At the windowbox PLLAD_MD = 2249 the IF line
+        // is only (2249 + 1) / 2 = 1125 units long, so IF_HB_ST2 = 1216 lies
+        // behind the end of the line and the picture breaks up. Use the same
+        // positions scaled by 2249 / 2553, which keeps the stock window at the
+        // same place within the line: 1216 -> 1071, 200 -> 176, 64 -> 56.
+        // IF_HB_ST2 + 1 = 1072 <= 1125 fits. Field-checked (2026-11): no
+        // break-up, picture width 47.2 cm.
+        // Vertical: the 15 kHz values above (VSCALE 479, IF_VB 60/62) crop the
+        // top and bottom of a 576p picture. Field-measured: VSCALE 515 and
+        // IF_VB 42/44 show the complete picture (35 cm high).
+        // A gray interference bar right of the 576p picture lies inside
+        // VDS_DIS_HB_ST = 1258. It is hidden by VDS_DIS_HB_ST <= 1199
+        // (field-measured, 2026-11: 1200 sometimes still shows a trace, picture
+        // content is cut from 1176 and below); 1196 is written further down.
+        // VDS_HB_ST has to stay at 1258: with VDS_HB_ST at 1120..1188 fine noise
+        // spikes and a rolling interference line appeared, with 1250 and 1258
+        // they were gone. applyBestHTotal() therefore leaves VDS_HB_ST larger
+        // than VDS_DIS_HB_ST alone for preset 0x07.
+        // Modes 1, 2 and 3 are not touched.
+        if (videoMode == 4) {
+            GBS::IF_HB_ST2::write(1071);
+            GBS::IF_HB_SP2::write(176);
+            GBS::IF_HBIN_SP::write(56);
+            GBS::VDS_VSCALE::write(515);
+            GBS::IF_VB_ST::write(42);
+            GBS::IF_VB_SP::write(44);
+        }
+
         // Horizontal: 4:3, calibrated on a 32-inch Loewe (originally 46.4 x 34.8 cm;
         // the complete test pattern now measures 47.0 x 35.0 cm)
         GBS::VDS_HB_SP::write(227);
         GBS::VDS_HB_ST::write(1258);
         GBS::VDS_DIS_HB_SP::write(327);
         GBS::VDS_DIS_HB_ST::write(1258);
+        if (videoMode == 4) {
+            GBS::VDS_DIS_HB_ST::write(1196); // hides the 576p bar, see above
+        }
         // DIS_HB 327..1258 is a crop mask, its center (792) is not the picture
         // center. Center the OSD on the center of the stock 1080p window
         // (252..1258 -> 755) instead; field-measured: the OSD sat ~2 cm too far
@@ -227,6 +261,19 @@ void applyWindowbox960(uint8_t videoMode)
         GBS::IF_VB_ST::write(510);
         GBS::IF_VB_SP::write(512);
         GBS::VDS_Y_DELAY::write(2);
+
+        // Progressive NTSC input (480p, videoMode 3): doPostPresetLoadSteps() has
+        // just applied the stock EDTV input window for the 1080p preset
+        // (IF_HB_ST2 = 1144, IF_HB_SP2 = 132). With the windowbox PLLAD_MD = 2491
+        // and IF_HBIN_SP = 146 below, the right ~1.2 cm of a 480p picture were
+        // missing. Field-measured (2026-11): IF_HB_ST2 = 1190 and IF_HB_SP2 = 152
+        // show the complete picture.
+        // IF_HB_ST2 + 1 = 1191 <= (2491 + 1) / 2 = 1246 fits into the IF line.
+        // Mode 1 and the modes 8, 9, 14 are not touched.
+        if (videoMode == 3) {
+            GBS::IF_HB_ST2::write(1190);
+            GBS::IF_HB_SP2::write(152);
+        }
 
         // IF_HBIN_SP is the left edge of the visible canvas; lowering it moves
         // the picture content to the right. Field-measured (2026-10): 202 is
