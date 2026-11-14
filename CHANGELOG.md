@@ -1,5 +1,50 @@
 # Changelog
 
+## [v1.7.4] – WebUI & server hardening
+
+### Fixed
+
+- **SSID markup injection in WiFi scan results**: SSIDs from foreign
+  access points in radio range were inserted into the scan result
+  table via `innerHTML` without escaping — both the `gbs-ssid`
+  attribute and the visible `<td>` cell. A crafted SSID could inject
+  markup. A new `escapeHtml()` helper now escapes `&`, `<`, `>`, `"`,
+  `'` before insertion, and the connected-SSID display uses
+  `textContent` instead of `innerHTML`. Applied to webui.html,
+  webui/src/index.js and webui/src/index.ts.
+
+- **`presetSlot` WebUI parameter not validated**: the slot value
+  received from the WebUI was written straight to `uopt->presetSlot`
+  without checking it against the slot whitelist. An empty value or a
+  `%00` would land as `slotValue[0] == 0`, which `String::indexOf()`
+  matches as the terminator and would slip past a naive check. The
+  handler now validates `slotParamValue.length() > 0`,
+  `slotValue[0] != '\0'`, and `slotIndexMap.indexOf(slotValue[0]) >= 0`
+  — the same whitelist the boot path uses — before accepting the slot.
+
+- **`saveUserPrefs()` called mid-way through slot field copy**: in
+  `handleType2Command()` the prefs were saved right after the scanline
+  strength was copied, before `wantVdsLineFilter`, `wantStepResponse`
+  and `wantPeaking` were set. A save at that point persisted a mix of
+  old and new values. `saveUserPrefs()` now runs after all five slot
+  fields are in place.
+
+- **Low-heap endpoints left the client waiting for its timeout**:
+  three WebUI endpoints (scan, save prefs, slots download) had no
+  `else` branch when the scratch allocation failed, so the request
+  was never answered and the browser waited until its own timeout.
+  They now respond `503` (scan, save prefs) or
+  `200 application/json "false"` (slots.bin download) so the client
+  can react immediately.
+
+### Changed
+
+- `wifiStaSSID.innerHTML = …` replaced with `wifiStaSSID.textContent = …`
+  (the connected SSID is text, not markup).
+- `webui_html.h` regenerated from the updated `webui.html`
+  (gzipped blob 184489 → 184701 bytes).
+- `FIRMWARE_VERSION` bumped to `v1.7.4`.
+
 ## [v1.7.3] – 960p windowbox for progressive inputs + pinned library versions
 
 ### Added

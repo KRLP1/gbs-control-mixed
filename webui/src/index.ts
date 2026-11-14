@@ -1418,7 +1418,7 @@ const wifiGetStatus = () => {
         GBSControl.ui.wifiApButton.classList.remove("gbs-button__secondary");
         GBSControl.ui.wifiStaButton.setAttribute("active", "");
         GBSControl.ui.wifiStaButton.classList.add("gbs-button__secondary");
-        GBSControl.ui.wifiStaSSID.innerHTML = `${GBSControl.wifi.ssid}`;
+        GBSControl.ui.wifiStaSSID.textContent = `${GBSControl.wifi.ssid}`;
       }
     });
 };
@@ -1834,6 +1834,17 @@ const wifiConnect = () => {
   });
 };
 
+// SSIDs come from foreign access points in radio range: never put them into
+// innerHTML unescaped (markup injection). String() keeps a missing field
+// rendering as "undefined" like before instead of throwing.
+const escapeHtml = (value: unknown): string =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const wifiScanSSID = () => {
   GBSControl.ui.wifiStaButton.setAttribute("disabled", "");
   GBSControl.ui.wifiListTable.innerHTML = "";
@@ -1880,11 +1891,11 @@ const wifiScanSSID = () => {
         return null;
       }
       return ssids.reduce((acc, ssid) => {
-        return `${acc}<tr gbs-ssid="${ssid.ssid}">
+        return `${acc}<tr gbs-ssid="${escapeHtml(ssid.ssid)}">
         <td class="gbs-icon" style="opacity:${
           parseInt(ssid.strength, 10) / 100
         }">wifi</td>
-        <td>${ssid.ssid}</td>
+        <td>${escapeHtml(ssid.ssid)}</td>
         <td class="gbs-icon">${ssid.encripted ? "lock" : "lock_open"}</td>
       </tr>`;
       }, "");

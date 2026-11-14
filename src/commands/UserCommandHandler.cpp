@@ -738,7 +738,6 @@ void handleType2Command(char argument)
                             disableScanlines();
                             SerialM.println("off");
                         }
-                        saveUserPrefs();
 
                         uopt->scanlineStrength = slots.slot[currentSlot].scanlinesStrength;
                         // same guard as the boot path in gbs-control.ino: slots.bin is a raw
@@ -748,6 +747,8 @@ void handleType2Command(char argument)
                         uopt->wantVdsLineFilter = slots.slot[currentSlot].wantVdsLineFilter;
                         uopt->wantStepResponse = slots.slot[currentSlot].wantStepResponse;
                         uopt->wantPeaking = slots.slot[currentSlot].wantPeaking;
+                        // persist after all five fields are set, not in the middle
+                        saveUserPrefs();
                         ok = true;
                     }
                 }

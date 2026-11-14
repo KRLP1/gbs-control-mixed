@@ -142,6 +142,9 @@ void startWebserver()
                 }
             }
             request->send(200); // reply
+        } else {
+            // low heap: answer anyway, otherwise the client waits for its timeout
+            request->send(503);
         }
     });
 
@@ -158,6 +161,9 @@ void startWebserver()
                 }
             }
             request->send(200); // reply
+        } else {
+            // low heap: answer anyway, otherwise the client waits for its timeout
+            request->send(503);
         }
     });
 
@@ -254,6 +260,9 @@ void startWebserver()
             }
 
             request->send(LittleFS, "/slots.bin", "application/octet-stream");
+        } else {
+            // low heap: same answer as the scratch allocation failure above
+            request->send(200, "application/json", "false");
         }
     });
 
@@ -268,10 +277,16 @@ void startWebserver()
                 String slotParamValue = slotParam->value();
                 char slotValue[2];
                 slotParamValue.toCharArray(slotValue, sizeof(slotValue));
-                uopt->presetSlot = (uint8_t)slotValue[0];
-                uopt->presetPreference = OutputCustomized;
-                saveUserPrefs();
-                result = true;
+                // Same whitelist as the boot path. An empty value (or %00) gives
+                // slotValue[0] == 0, which String::indexOf() would find as the
+                // terminator, so it has to be excluded explicitly.
+                if (slotParamValue.length() > 0 && slotValue[0] != '\0' &&
+                    slotIndexMap.indexOf(slotValue[0]) >= 0) {
+                    uopt->presetSlot = (uint8_t)slotValue[0];
+                    uopt->presetPreference = OutputCustomized;
+                    saveUserPrefs();
+                    result = true;
+                }
             }
         }
 
