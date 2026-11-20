@@ -9,6 +9,7 @@
 #include "../clock/Si5351Manager.h"
 #include "../video/VideoInput.h"
 #include "../video/VideoTiming.h"
+#include "../video/Sharpness.h"
 #include "../storage/SlotManager.h"
 #include "../wifi/WiFiManager.h"
 #include "../menu/OLEDMenu.h"
@@ -1551,42 +1552,33 @@ void doPostPresetLoadSteps()
         rto->applyPresetDoneStage = 1;
     }
 
-    // Re-apply peaking level from user preferences (preset may have overridden registers).
+    // Re-apply the user's sharpness (a preset may have overridden the registers).
     // Skip for custom presets: their saved register values should be preserved as-is.
     if (!rto->isCustomPreset) {
-        if (uopt->wantPeaking && uopt->peakingLevel > 0) {
-            static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
-            static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
-            static const uint8_t stepGain[4] = {1, 1, 4, 8};
-            GBS::VDS_PK_Y_H_BYPS::write(0);
-            GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel]);
-            GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel]);
-            if (rto->presetID != 0x05 && rto->presetID != 0x15) {
-                GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel]);
-            }
-        } else {
-            GBS::VDS_PK_Y_H_BYPS::write(1);
-        }
+        applyPictureSharpness(); // picSharpness == 0 -> peaking off
     }
 
-    // For custom presets, sync uopt->wantPeaking with the actual register state.
+    // For custom presets, derive picSharpness from the actual register state.
     // The preset file may have peaking enabled/disabled differently from the
     // current uopt value (e.g. user turned peaking off before loading the preset).
     // Without this sync, the status-ping would report the old uopt value and
     // the WebUI would show peaking as off even though the registers have it on.
+    // (Registers only; not saved, so the stored preference stays as it was.)
     if (rto->isCustomPreset) {
-        uopt->wantPeaking = (GBS::VDS_PK_Y_H_BYPS::read() == 0) ? 1 : 0;
-        if (uopt->wantPeaking) {
-            // Reverse-map peaking level from the LB gain register
-            uint8_t lbGain = GBS::VDS_PK_LB_GAIN::read();
-            if (lbGain >= 0x3f) uopt->peakingLevel = 3;       // Max
-            else if (lbGain >= 0x28) uopt->peakingLevel = 2;  // Stark
-            else if (lbGain >= 0x16) uopt->peakingLevel = 1;  // Normal
-            else {
-                uopt->peakingLevel = 0;
-                uopt->wantPeaking = 0;
+        if (GBS::VDS_PK_Y_H_BYPS::read() != 0) {
+            uopt->picSharpness = 0;
+        } else {
+            // reverse-map from the LB gain register (the slider writes LB = value)
+            const uint8_t lbGain = GBS::VDS_PK_LB_GAIN::read();
+            if (lbGain >= 0x3f) {
+                uopt->picSharpness = SHARPNESS_MAX_STEP;
+            } else if (lbGain > 31) {
+                uopt->picSharpness = 31;
+            } else {
+                uopt->picSharpness = lbGain; // 0 = no peaking gain = off
             }
         }
+        syncPeakingFromSharpness();
     }
 
     unfreezeVideo();

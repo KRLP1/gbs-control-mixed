@@ -10,6 +10,7 @@
 #include "../gbs/GBSPhase.h"
 #include "../gbs/GBSSync.h"
 #include "../video/Scanlines.h"
+#include "../video/Sharpness.h"
 #include "../video/Deinterlacing.h"
 #include "../video/VideoInput.h"
 #include "../video/framesync.h"
@@ -24,6 +25,11 @@
 
 typedef TV5725<GBS_ADDR> GBS;
 
+// Pending values handed over from the value queue (populated in gbs-control.ino
+// loop() before handleType2Command runs; 255 = no value -> command is ignored).
+uint8_t pendingSharpnessValue = 255;
+uint8_t pendingScanlineStrength = 255;
+
 static void setFrameTimeLockMethod(uint8_t method)
 {
     if (uopt->frameTimeLockMethod == method) {
@@ -35,6 +41,53 @@ static void setFrameTimeLockMethod(uint8_t method)
     uopt->frameTimeLockMethod = method;
     saveUserPrefs();
     activeFrameTimeLockInitialSteps();
+}
+
+// Reads the SlotMeta entry of the current slot (uopt->presetSlot) from slots.bin: one
+// 32 byte record by seek instead of the whole 2.3 KB array, so no big buffer has to sit in
+// RAM permanently (a static one costs that much on the ESP8266 for the whole runtime).
+static bool readCurrentSlotMeta(SlotMeta &meta)
+{
+    int currentSlot = slotIndexMap.indexOf(uopt->presetSlot);
+    if (currentSlot < 0 || currentSlot >= SLOTS_TOTAL) {
+        return false;
+    }
+    File f = LittleFS.open(SLOTS_FILE, "r");
+    if (!f) {
+        return false;
+    }
+    // plausibility check as before: a file of any other size is not ours
+    bool ok = (f.size() == sizeof(SlotMetaArray)) &&
+              f.seek((uint32_t)currentSlot * sizeof(SlotMeta)) &&
+              (f.read((byte *)&meta, sizeof(meta)) == sizeof(meta));
+    f.close();
+    return ok;
+}
+
+// Restores scanline on/off + strength from the slot metadata (slots.bin) of the current
+// slot. Used when a preset file carries no scanline line (older firmware), and by the
+// "restore filters" command. A slot that was never saved with scanlines (scanlines off and
+// strength 0) keeps the current strength instead of resetting it to 0 = strongest lines.
+static bool restoreScanlinesFromSlot(bool persist)
+{
+    SlotMeta meta;
+    if (!readCurrentSlotMeta(meta)) {
+        return false;
+    }
+    const bool on = meta.scanlines != 0;
+    uint8_t strength = meta.scanlinesStrength;
+    // slots.bin is a raw struct dump: a corrupt or foreign file must not set an invalid value
+    if (strength > SCANLINES_MAX_STRENGTH_VALUE) {
+        strength = 0x30;
+    }
+    if (!on && strength == 0) {
+        strength = uopt->scanlineStrength;
+    }
+    applyScanlineState(on, strength, persist);
+    SerialM.print(F("slot: "));
+    SerialM.print((char)uopt->presetSlot);
+    SerialM.println(F(" (scanlines from slot data)"));
+    return true;
 }
 
 void handleType2Command(char argument)
@@ -72,13 +125,27 @@ void handleType2Command(char argument)
         case '3': // load custom preset
         {
             uopt->presetPreference = OutputCustomized; // custom
+            // Scanlines are part of the preset like the sharpness: the preset file carries
+            // them (loadPresetFromLittleFS() applies them while the pending flag is set).
+            // Presets saved by older firmware have no scanline line; those fall back to
+            // the slot metadata (slots.bin) below.
+            presetScanlinesRestored = false;
             if (rto->videoStandardInput == 14) {
-                // vga upscale path: let synwatcher handle it
+                // vga upscale path: let synwatcher handle it (the preset file is read
+                // later, not by this command, so the slot metadata is used here)
                 rto->videoStandardInput = 15;
+                presetScanlinesRestorePending = false;
             } else {
                 // normal path
+                presetScanlinesRestorePending = true;
                 applyPresets(rto->videoStandardInput);
+                presetScanlinesRestorePending = false; // consumed by the loader, or not read at all
             }
+            if (!presetScanlinesRestored) {
+                restoreScanlinesFromSlot(false);
+            }
+            // saveUserPrefs() below persists everything at once; a deferred
+            // write armed by the value steppers is covered by that save
             saveUserPrefs();
         } break;
         case '4': // save custom preset
@@ -106,43 +173,20 @@ void handleType2Command(char argument)
             //
             break;
         case '7':
-            uopt->wantScanlines = !uopt->wantScanlines;
-            SerialM.print(F("scanlines: "));
-            if (uopt->wantScanlines) {
-                SerialM.println(F("on (Line Filter recommended)"));
-            } else {
-                disableScanlines();
-                SerialM.println("off");
-            }
-            saveUserPrefs();
+            // toggle on/off, the strength is kept (applyScanlineState prints the new state)
+            applyScanlineState(!uopt->wantScanlines, uopt->scanlineStrength, true);
             break;
-        case '8': {
-            // sharpness/peaking level: 0=off, 1=normal, 2=strong, 3=max
-            uopt->peakingLevel = (uopt->peakingLevel + 1) & 3;
-            // Sync wantPeaking with peakingLevel (keeps WebUI toggle consistent)
-            uopt->wantPeaking = (uopt->peakingLevel > 0) ? 1 : 0;
-            SerialM.print(F("peaking level: "));
-            SerialM.println(uopt->peakingLevel);
-            saveUserPrefs();
-            if (uopt->wantPeaking && uopt->peakingLevel > 0) {
-                static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
-                static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
-                static const uint8_t stepGain[4] = {1, 1, 4, 8};
-                GBS::VDS_PK_Y_H_BYPS::write(0);
-                GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel]);
-                GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel]);
-                if (rto->presetID != 0x05 && rto->presetID != 0x15) {
-                    GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel]);
-                }
-            } else {
-                GBS::VDS_PK_Y_H_BYPS::write(1);
-            }
-        } break;
+        case '8':
+            // peaking level button: 0=off, 1=normal (22), 2=strong (31), 3=max (32)
+            cyclePeakingLevel();
+            break;
         case '9':
             //
             break;
         case 'a':
             webSocket.disconnect();
+            // write a pending deferred stepper save now: the restart would drop it
+            flushDeferredUserPrefsSave();
             Serial.println(F("restart"));
             delay(60);
 #ifdef ESP8266
@@ -553,21 +597,10 @@ void handleType2Command(char argument)
                 GBS::CAPTURE_ENABLE::write(1);
             }
             break;
-        case 'K':
-            // scanline strength
-            if (uopt->scanlineStrength >= 0x10) {
-                uopt->scanlineStrength -= 0x10;
-            } else {
-                uopt->scanlineStrength = 0x50;
-            }
-            if (rto->scanlinesEnabled) {
-                GBS::MADPT_Y_MI_OFFSET::write(uopt->scanlineStrength);
-                GBS::MADPT_UV_MI_OFFSET::write(uopt->scanlineStrength);
-            }
-            saveUserPrefs();
-            SerialM.print(F("Scanline Brightness: "));
-            SerialM.println(uopt->scanlineStrength, HEX);
-            break;
+        // 'K' was the "Intensität" button (one scanline strength step stronger).
+        // Removed together with the WebUI button: the value steppers own that
+        // now. The letter stays reserved here so a future user command can
+        // take it without colliding with the serial 'K' (HD bypass switch).
         case 'Z':
             // brightness++ (wrap guard: 8 bit register)
             if (GBS::VDS_Y_OFST::read() < 255) {
@@ -718,43 +751,68 @@ void handleType2Command(char argument)
         case 'V': {
             // /gbs/restore-filters: Slot-Filter aus slots.bin wiederherstellen.
             // Läuft hier im loop()-Kontext (I2C + LittleFS).
-            static SlotMetaArray slots; // 2,3 KB, static statt Stack
-            File f = LittleFS.open(SLOTS_FILE, "r");
+            // Only the current slot's 32 byte record is read (readCurrentSlotMeta), not the
+            // whole array: no 2.3 KB static buffer in RAM.
+            SlotMeta meta;
             bool ok = false;
-            if (f) {
-                size_t slotsRead = f.read((byte *)&slots, sizeof(slots));
-                f.close();
-                if (slotsRead == sizeof(slots)) {
-                    int currentSlot = slotIndexMap.indexOf(uopt->presetSlot);
-                    if (currentSlot >= 0) {
-                        uopt->wantScanlines = slots.slot[currentSlot].scanlines;
-
-                        SerialM.print(F("slot: "));
-                        SerialM.println(uopt->presetSlot);
-                        SerialM.print(F("scanlines: "));
-                        if (uopt->wantScanlines) {
-                            SerialM.println(F("on (Line Filter recommended)"));
-                        } else {
-                            disableScanlines();
-                            SerialM.println("off");
-                        }
-
-                        uopt->scanlineStrength = slots.slot[currentSlot].scanlinesStrength;
-                        // same guard as the boot path in gbs-control.ino: slots.bin is a raw
-                        // struct dump, a corrupt or foreign file must not set an invalid value
-                        if (uopt->scanlineStrength > 0x50) // 0x50 = scanlines off is the highest value
-                            uopt->scanlineStrength = 0x30;
-                        uopt->wantVdsLineFilter = slots.slot[currentSlot].wantVdsLineFilter;
-                        uopt->wantStepResponse = slots.slot[currentSlot].wantStepResponse;
-                        uopt->wantPeaking = slots.slot[currentSlot].wantPeaking;
-                        // persist after all five fields are set, not in the middle
-                        saveUserPrefs();
-                        ok = true;
-                    }
+            if (readCurrentSlotMeta(meta)) {
+                // scanlines on/off + strength through the one shared function
+                // (persisted below together with the other filter fields). Skipped
+                // when the preset load just before already took them from the
+                // preset file: the file is written together with the slot data,
+                // and the file value is the one that was actually saved.
+                if (!presetScanlinesRestored) {
+                    const bool on = meta.scanlines != 0;
+                    uint8_t strength = meta.scanlinesStrength;
+                    // same guard as the boot path: slots.bin is a raw struct dump,
+                    // a corrupt or foreign file must not set an invalid value
+                    if (strength > SCANLINES_MAX_STRENGTH_VALUE)
+                        strength = 0x30;
+                    if (!on && strength == 0) // slot never saved with scanlines
+                        strength = uopt->scanlineStrength;
+                    applyScanlineState(on, strength, false);
                 }
+                uopt->wantVdsLineFilter = meta.wantVdsLineFilter;
+                uopt->wantStepResponse = meta.wantStepResponse;
+                uopt->wantPeaking = meta.wantPeaking;
+                // slots only store on/off: fold it into picSharpness (off -> 0,
+                // on -> last non-zero value), so peaking state has one source
+                adoptWantPeaking();
+                // persist after all five fields are set, not in the middle
+                saveUserPrefs();
+                ok = true;
             }
             if (!ok) {
                 SerialM.println(F("restore filters failed"));
+            }
+        } break;
+        case 'Y': {
+            // set sharpness 0..31 (value from userValueQueue, see gbs-control.ino loop).
+            // 'Y' chosen because v1.7.4 already uses 'J' for menu language German
+            // (and 'I' for English); the old plan's 'J'/'p' are taken.
+            // Without a value (255) there is nothing to set: ignore the command.
+            // setPictureSharpness saves deferred: the stepper raster must not
+            // cost one LittleFS write per click (heap recovery, see there).
+            if (pendingSharpnessValue != 255) {
+                setPictureSharpness(pendingSharpnessValue);
+                pendingSharpnessValue = 255;
+            }
+        } break;
+        case 'y': {
+            // scanline value command (value from userValueQueue):
+            //   0x00..0x60 = switch scanlines on with this strength (0x00 = strongest),
+            //   0x7f       = switch scanlines off (strength is kept).
+            // ('l' is the SDRAM clock cycle command, so the value command is 'y')
+            // Without a value (255) there is nothing to set: ignore the command.
+            // persist = false: the +/- stepper raster ends in one deferred
+            // LittleFS write (see PreferencesManager), not one write per click.
+            if (pendingScanlineStrength != 255) {
+                if (pendingScanlineStrength == SCANLINES_OFF_VALUE) {
+                    applyScanlineState(false, uopt->scanlineStrength, false);
+                } else {
+                    applyScanlineState(true, pendingScanlineStrength, false);
+                }
+                pendingScanlineStrength = 255;
             }
         } break;
         // Menu language commands ('I' = English, 'J' = German). Queued by /lang/set
@@ -777,4 +835,3 @@ void handleType2Command(char argument)
             break;
     }
 }
-

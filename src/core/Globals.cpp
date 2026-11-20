@@ -55,6 +55,7 @@ char serialCommand;               // Serial / Web Server commands
 char userCommand;               // Serial / Web Server commands
 CommandQueue serialCommandQueue;  // SPSC queue, replaces String buffer for AsyncWebServer callbacks
 CommandQueue userCommandQueue;    // SPSC queue, replaces String buffer for AsyncWebServer callbacks
+ValueCommandQueue userValueQueue; // SPSC queue for value commands ('Y' sharpness, 'y' scanline strength)
 // lastSegment is defined in src/gbs/GBSRegister.cpp
 
 // Best observed Si5351 XTAL load capacitance setting from detection/init.

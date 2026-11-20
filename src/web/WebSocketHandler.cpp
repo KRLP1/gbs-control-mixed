@@ -1,13 +1,14 @@
 #include "WebSocketHandler.h"
 #include "../core/Globals.h"
 #include "../core/options.h"
+#include "../video/Sharpness.h"
 
 void updateWebSocketData()
 {
     if (rto->webServerEnabled && rto->webServerStarted) {
         if (webSocket.connectedClients() > 0) {
 
-            constexpr size_t MESSAGE_LEN = 7;
+            constexpr size_t MESSAGE_LEN = 9;
             char toSend[MESSAGE_LEN] = {0};
             toSend[0] = '#'; // makeshift ping in slot 0
 
@@ -115,15 +116,25 @@ void updateWebSocketData()
                 toSend[5] |= (1 << 4);
             }
 
-            // Peaking level (0-3) in bits 0-1 of byte 6.
-            // '@' = 0x40 als "byte ist belegt"-Marker (analog zu bytes 3-5),
-            // um ungenutzte Bits auf einen Wert > 0x20 zu halten.
-            // Nur melden, wenn Peaking per Kantenanhebung-Taste ('f') auch wirklich aktiv ist -
-            // sonst wuerde die Peaking-Stufe-Taste/der Fuellbalken einen Wert > 0 anzeigen,
-            // waehrend der Chip gerade bypassed ist (uopt->peakingLevel bleibt beim Ausschalten
-            // bewusst erhalten, damit 'f' die zuletzt gewaehlte Stufe wieder aufgreift).
+            // Byte 6: '@' = 0x40 as the "byte is present" marker (like bytes 3-5), which
+            // keeps the unused bits at a value above 0x20.
+            //   bits 0-1: peaking level 0-3 (derived from uopt->picSharpness, 0 = off)
+            //   bit 2:    scanline strength bit 0x40. The strength 0x00..0x60 does not fit
+            //             into one ASCII char ('@' + 0x60 > 0x7F), so its lower 6 bits are
+            //             in byte 8 and this bit carries the rest.
             toSend[6] = '@';
             toSend[6] |= (uopt->wantPeaking ? (uopt->peakingLevel & 0x03) : 0);
+            if (uopt->scanlineStrength & 0x40) {
+                toSend[6] |= (1 << 2);
+            }
+
+            // Byte 7: sharpness 0..32 (32 = max), '@' + value, so the byte stays above
+            // 0x20 and ASCII. Sent while peaking is off as well (then 0 = soft).
+            // Byte 8: scanline strength lower 6 bits, '@' + (strength & 0x3F). The real
+            // stored strength is sent whether scanlines are on or off, so the WebUI
+            // shows what a + / - press starts from.
+            toSend[7] = (char)('@' + (uopt->picSharpness > SHARPNESS_MAX_STEP ? SHARPNESS_MAX_STEP : uopt->picSharpness));
+            toSend[8] = (char)('@' + (uopt->scanlineStrength & 0x3F));
 
             // send ping and stats
             if (ESP.getFreeHeap() > 6000) {
@@ -156,6 +167,33 @@ void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *payload, size_t 
         if (!queued) {
             SerialM.deferLog(F("Warning: ws command queue full, dropping\n"));
         }
+    } else if (type == WStype_TEXT && length >= 3 && length <= 8 &&
+               (payload[0] == 'Y' || payload[0] == 'y') && payload[1] == '=') {
+        // Value commands over the websocket ("Y=<0..32>" decimal / "y=<hex>" with the
+        // same 0x7f off marker as the HTTP endpoint), pushed into userValueQueue
+        // (SPSC + fences, see ValueCommandQueue.h). Wire format: "Y=" / "y=" followed
+        // by the ASCII digits of the value, parsed here with the SAME base and range
+        // validation as the /gbs/set/* HTTP endpoints, so both paths behave
+        // identically. '=' as the separator keeps the frame clearly distinct from
+        // the 2-byte s/u commands and from anything the value digits could produce.
+        // No free-heap gate on purpose: one small TCP frame instead of a full HTTP
+        // request, and it keeps working when the HTTP guards stand down below 10k.
+        char valBuf[7];
+        memcpy(valBuf, &payload[2], length - 2);
+        valBuf[length - 2] = '\0';
+        const bool isSharpness = (payload[0] == 'Y');
+        char *end = nullptr;
+        const long parsed = strtol(valBuf, &end, isSharpness ? 10 : 16);
+        bool valid = (end != nullptr && *end == '\0');
+        if (isSharpness) {
+            valid = valid && parsed >= 0 && parsed <= 32;
+        } else {
+            valid = valid && parsed >= 0 && (parsed <= 0x60 || parsed == 0x7f);
+        }
+        const bool queued = valid && userValueQueue.push((char)payload[0], (uint8_t)parsed);
+        if (!queued) {
+            SerialM.deferLog(F("Warning: ws value command dropped (invalid or queue full)\n"));
+        }
     }
 }
 
@@ -181,4 +219,3 @@ void webSocketHeartbeat()
         webSocket.sendPing(i);
     }
 }
-

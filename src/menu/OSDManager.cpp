@@ -2,7 +2,6 @@
 #include "../core/options.h"
 #include "../video/Scanlines.h"
 extern userOptions *uopt;
-extern runTimeOptions *rto;
 extern void saveUserPrefs();
 extern void shiftHorizontalRight();
 extern void shiftHorizontalLeft();
@@ -30,36 +29,55 @@ bool osdBrightness(OSDMenuConfig &config)
 }
 bool osdScanlines(OSDMenuConfig &config)
 {
+    // Same model and the same steps as the WebUI stepper:
+    //   strength 0x00 = strongest (biggest) scanlines ... 0x60 = weakest (finest),
+    //   fine 0x04 steps, "+" = stronger (value down), "-" = weaker (value up).
+    // "Off" is its own position behind the weak end, independent of the value:
+    //   "-" at 0x60 switches the scanlines off (empty bar), "+" while off switches
+    //   them on at 0x60 and goes on towards stronger. At the strong end (0x00) the
+    //   value just stays. 0x00 is an ordinary strength, never "off".
+    // All changes go through applyScanlineState(), the same single function the
+    // WebUI value command 'y' and the preset restore use, so registers, the
+    // on/off state and range clamping are identical everywhere. persist = false:
+    // turning the encoder through several steps must not cost one LittleFS write
+    // per step - the preferences are saved once, shortly after the last step.
+    const uint8_t STEP = 0x04;
+    const uint8_t WEAKEST = SCANLINES_MAX_STRENGTH_VALUE; // 0x60
+    const bool on = uopt->wantScanlines != 0;
+    uint8_t current = uopt->scanlineStrength;
+    if (current > WEAKEST) {
+        current = WEAKEST; // safety net, same correction as applyScanlineState
+    }
     if (config.onChange) {
         if (config.inc) {
-            if (uopt->scanlineStrength > 0) {
-                uopt->scanlineStrength -= 0x10;
+            if (!on) {
+                applyScanlineState(true, WEAKEST, false); // off -> weakest visible lines
+            } else if (current > 0x00) {
+                uint8_t next = (current >= STEP) ? (uint8_t)(current - STEP) : 0x00;
+                applyScanlineState(true, next, false);
+            } // else: already strongest, stay
+        } else if (on) {
+            if (current >= WEAKEST) {
+                applyScanlineState(false, current, false); // weakest -> off (value kept)
+            } else {
+                uint8_t next = (uint8_t)(current + STEP);
+                if (next > WEAKEST) {
+                    next = WEAKEST;
+                }
+                applyScanlineState(true, next, false);
             }
-        } else {
-            uopt->scanlineStrength = MIN(uopt->scanlineStrength + 0x10, 0x50);
-        }
-        if (uopt->scanlineStrength == 0x50) {
-            uopt->wantScanlines = 0;
-            // like serial command '7': the SyncWatcher only switches
-            // scanlines off in bob mode, so switch them off here directly
-            disableScanlines();
-        } else {
-            uopt->wantScanlines = 1; // the SyncWatcher enables them
-        }
-        // like serial command 'K': touch the mixing registers only while
-        // scanlines are active. disableScanlines() parks MADPT_Y_MI_OFFSET at
-        // 0x7f (mixing off); overwriting it would alter the picture.
-        if (rto->scanlinesEnabled) {
-            GBS::MADPT_Y_MI_OFFSET::write(uopt->scanlineStrength);
-            GBS::MADPT_UV_MI_OFFSET::write(uopt->scanlineStrength);
-        }
-        saveUserPrefs();
+        } // else: already off, stay
     }
+    // Bar like the WebUI bar: off = empty, 0x60 = shortest visible bar, 0x00 = full.
     config.barLength = 128;
-    if (uopt->scanlineStrength == 0) {
-        config.barActiveLength = 128;
+    if (uopt->wantScanlines) {
+        uint8_t shown = uopt->scanlineStrength;
+        if (shown > WEAKEST) {
+            shown = WEAKEST;
+        }
+        config.barActiveLength = 8 + ((uint16_t)(WEAKEST - shown) * 120) / WEAKEST;
     } else {
-        config.barActiveLength = (5 - uopt->scanlineStrength / 0x10) * 25;
+        config.barActiveLength = 0;
     }
     return true;
 }

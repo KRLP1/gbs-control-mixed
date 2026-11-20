@@ -30,16 +30,26 @@ const I18N = {
     btn_scale: "Skalieren",
     btn_borders: "Rahmen",
     // Filters section
-    btn_intensity: "Intensität",
     btn_linefilter: "Linienfilter",
     help_filters_1: "Scanlines funktionieren nur bei 240p-Quellen oder bei 480i mit Bob-Deinterlacing.",
     help_filters_2: "Der Linienfilter beseitigt blockartige Pixelartefakte beim Hochskalieren über 480p hinaus und wird empfohlen.",
     btn_peaking: "Kantenanhebung",
-    btn_peaking_level: "Peaking-Stufe",
     btn_step: "Sprungantwort",
     help_peaking_1: "Kantenanhebung erhöht den Kontrast an horizontalen Helligkeitssprüngen und wird empfohlen.",
-    help_peaking_2: "Peaking-Stufe wählt die Intensität der Kantenanhebung: Aus, Normal, Stark oder Max.",
     help_peaking_3: "Sprungantwort erhöht die Schärfe an horizontalen Farbsprüngen und wird empfohlen.",
+    help_scanline_strength: "Scanline-Intensität: 0x00 (größte Linien) bis 0x60 (feinste Linien), in feinen 0x04-Schritten nahezu stufenlos. + macht die Linien stärker (Wert runter), − schwächer (Wert rauf). − auf der schwächsten Stufe schaltet die Scanlines aus (leerer Balken), + von „Aus“ schaltet sie wieder ein. „Custom“ steht über dem Balken, wenn der Wert keiner Vorgabe entspricht. Die Einstellung wird mit dem Preset gespeichert.",
+    help_sharpness: "Schärfe-Regler: 0 bis 32 (0 = Weich/aus, 22 = Normal, 32 = Stark); + und − in Einzel­schritten, der Balken zeigt die Stärke, „Custom“ steht über dem Balken, wenn von Hand verstellt.",
+    preset_light: "Leicht",
+    preset_medium: "Mittel",
+    preset_strong: "Stark",
+    preset_soft: "Weich",
+    preset_normal: "Normal",
+    preset_sharp: "Stark",
+    stepper_custom_plain: "Custom",
+    stepper_off: "Aus",
+    stepper_error: "[!] Einstellung nicht uebernommen (Geraet ausgelastet)\n",
+    step_weaker: "Schwächer",
+    step_stronger: "Stärker",
     legend_color: "Farbkorrektur",
     btn_brightness: "Helligkeit",
     btn_contrast: "Kontrast",
@@ -143,10 +153,6 @@ const I18N = {
     wifi_scanning: "Suche läuft...",
     wifi_no_networks: "Keine Netzwerke gefunden",
     alert_ap_mode: 'Wechsle in den AP-Modus. Bitte mit der SSID "gbscontrol" verbinden und dann OK klicken',
-    peak_off: "Peaking: Aus",
-    peak_normal: "Peaking: Normal",
-    peak_strong: "Peaking: Stark",
-    peak_max: "Peaking: Max",
     // Online update
     legend_ota: "Online-Update",
     help_ota_1: "Prüft auf GitHub (KRLP1/gbs-control-mixed) nach neuerer Firmware und installiert sie direkt (mit SHA256-Prüfung)",
@@ -203,16 +209,26 @@ const I18N = {
     btn_scale: "Scale",
     btn_borders: "Borders",
     // Filters section
-    btn_intensity: "Intensity",
     btn_linefilter: "Line filter",
     help_filters_1: "Scanlines only work with 240p sources, or 480i with bob deinterlacing.",
     help_filters_2: "The line filter removes blocky pixel artifacts when upscaling beyond 480p and is recommended.",
     btn_peaking: "Peaking",
-    btn_peaking_level: "Peaking level",
     btn_step: "Step response",
     help_peaking_1: "Peaking increases the contrast at horizontal brightness transitions and is recommended.",
-    help_peaking_2: "Peaking level selects the peaking intensity: off, normal, strong or max.",
     help_peaking_3: "Step response increases sharpness at horizontal color transitions and is recommended.",
+    help_scanline_strength: "Scanline intensity: 0x00 (biggest lines) to 0x60 (finest lines), in fine 0x04 steps almost stepless. + makes the lines stronger (value down), - weaker (value up). - at the weakest step switches the scanlines off (empty bar), + from \"Off\" switches them on again. \"Custom\" appears above the bar when the value matches no preset. The setting is saved with the preset.",
+    help_sharpness: "Sharpness slider: 0 to 32 (0 = soft/off, 22 = normal, 32 = strong); + and - in single steps, the bar shows the strength, “Custom” sits above the bar when set by hand.",
+    preset_light: "Light",
+    preset_medium: "Medium",
+    preset_strong: "Strong",
+    preset_soft: "Soft",
+    preset_normal: "Normal",
+    preset_sharp: "Strong",
+    stepper_custom_plain: "Custom",
+    stepper_off: "Off",
+    stepper_error: "[!] Setting not applied (device busy)\n",
+    step_weaker: "Weaker",
+    step_stronger: "Stronger",
     legend_color: "Color correction",
     btn_brightness: "Brightness",
     btn_contrast: "Contrast",
@@ -316,10 +332,6 @@ const I18N = {
     wifi_scanning: "Scanning...",
     wifi_no_networks: "No networks found",
     alert_ap_mode: 'Switching to AP mode. Please connect to the SSID "gbscontrol" and then click OK',
-    peak_off: "Peaking: Off",
-    peak_normal: "Peaking: Normal",
-    peak_strong: "Peaking: Strong",
-    peak_max: "Peaking: Max",
     // Online update
     legend_ota: "Online update",
     help_ota_1: "Checks GitHub (KRLP1/gbs-control-mixed) for newer firmware and installs it directly (with SHA256 check)",
@@ -376,6 +388,16 @@ const applyI18n = () => {
       el.setAttribute("placeholder", t(key));
     }
   });
+  document.querySelectorAll<HTMLElement>("[data-i18n-attr]").forEach((el) => {
+    // "title:key" -> set the title attribute to the translated key
+    const spec = el.getAttribute("data-i18n-attr");
+    if (spec) {
+      const sep = spec.indexOf(":");
+      if (sep > 0) {
+        el.setAttribute(spec.slice(0, sep), t(spec.slice(sep + 1)));
+      }
+    }
+  });
   document.documentElement.setAttribute("lang", LANG);
   const langLabel = document.querySelector("[gbs-language-label]");
   if (langLabel) {
@@ -387,6 +409,9 @@ const applyI18n = () => {
   }
   // the update status line is built from a key, so it can follow the language too
   otaRenderMessage();
+  // the value steppers build their label text in code ("Custom", preset names)
+  (GBSControl as any).sharpnessStepper?.render?.();
+  (GBSControl as any).scanlineStrengthStepper?.render?.();
 };
 
 // Switch language: applies immediately client-side and (optionally) persists
@@ -673,6 +698,8 @@ const createWebSocket = () => {
       messageDataAt4,
       messageDataAt5,
       messageDataAt6,
+      messageDataAt7,
+      messageDataAt8,
     ] = message.data;
 
     if (messageDataAt0 != "#") {
@@ -801,12 +828,35 @@ const createWebSocket = () => {
         updateFtlMethodRowsVisibility((optionByte1 & 0x02) === 0x02);
       }
 
-      // Peaking level aus Byte 6 parsen (Bits 0-1).
-      // Wird nur gesendet, wenn Firmware >= v1.4.2 (altes Format hat nur 6 Bytes).
+      // Byte 6 parsen: Bit 2 ist das 0x40-Bit der Scanline-Staerke (die Staerke
+      // 0x00..0x60 passt nicht verlustfrei in ein ASCII-Byte, s. Byte 8).
+      // Bits 0-1 (alter Peaking-Level) interessieren nicht mehr: der
+      // Peaking-Stufen-Knopf ist weg, die Schärfe kommt als Byte 7.
+      let scanlineStrengthHighBit = false;
       if (messageDataAt6) {
         const peakingByte = messageDataAt6.charCodeAt(0);
-        const newLevel = peakingByte & 0x03;
-        (GBSControl as any).setPeakingLevel?.(newLevel);
+        scanlineStrengthHighBit = (peakingByte & 0x04) != 0;
+      }
+
+      // Byte 7: sharpness 0..32 ('@' + value; 0 = off/bypass, 32 = max).
+      // Byte 8: scanline strength 0x00..0x60 ('@' + low 6 bits; the 0x40 bit rides
+      // in byte 6 bit 2), always the stored value, whether scanlines are on or off.
+      // Older firmware sends fewer bytes; the steppers then keep their default.
+      if (messageDataAt7 !== undefined && messageDataAt7 !== "") {
+        const sharpness = messageDataAt7.charCodeAt(0) - 0x40;
+        (GBSControl as any).setSharpnessStepper?.(sharpness);
+      }
+      if (messageDataAt8 !== undefined && messageDataAt8 !== "") {
+        const strength = messageDataAt8.charCodeAt(0) - 0x40;
+        // on/off = bit 1 of option byte 0 (same bit the Scanlines toggle button shows)
+        const scanlinesOn =
+          messageDataAt3 !== undefined && messageDataAt3 !== ""
+            ? (messageDataAt3.charCodeAt(0) & 0x02) == 0x02
+            : undefined;
+        (GBSControl as any).setScanlineStrengthStepper?.(
+          (scanlineStrengthHighBit ? 0x40 : 0x00) | (strength & 0x3f),
+          scanlinesOn
+        );
       }
     }
   };
@@ -859,6 +909,26 @@ const sendWsCommand = (type: string, link: string) => {
   ) {
     try {
       GBSControl.ws.send(type + link.charAt(0));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  return false;
+};
+
+// send a value command ("Y<0..32>" / "y<hex 00..60|7f>") over the open websocket.
+// Returns false when the socket is not usable; the caller then falls back to the
+// HTTP endpoints (single-flight). The device-side handler is in
+// WebSocketHandler.cpp (WStype_TEXT, length 3).
+const sendWsValueCommand = (cmd: string, value: string) => {
+  if (
+    GBSControl.isWsActive &&
+    GBSControl.ws &&
+    GBSControl.ws.readyState === 1
+  ) {
+    try {
+      GBSControl.ws.send(cmd + "=" + value);
       return true;
     } catch (e) {
       return false;
@@ -2046,45 +2116,229 @@ const initGBSButtons = () => {
     }
   });
 
-  // Peaking level button: device is source of truth (not local counter)
-  (() => {
-    const peakingBtn = document.querySelector('[gbs-message="8"][gbs-message-type="user"]') as HTMLElement;
-    if (!peakingBtn) return;
+  // Value steppers (sharpness 0-32, scanline strength 0x00-0x60) with custom indication:
+  // the status ping is the source of truth; preset buttons only light up
+  // on an exact value match, otherwise the label shows "Custom" (without the value;
+  // the value itself is always visible in the bar below).
+  // Scanlines: 0x00 = strongest (biggest lines), 0x60 = weakest (finest lines). The +
+  // button means "stronger", so it DECREASES the value; - increases it (fine step
+  // 0x04, so it is quasi-stepless). On/off is independent of the value: "Off" is its
+  // own position behind the weak end (- at 0x60 switches off, + while off switches on
+  // at 0x60), shown as an empty bar - exactly like the OSD. Sharpness 32 = "Stark"
+  // (the old peaking level 3: LB/LH 0x3f full register width).
+  const initValueStepper = (
+    kind: "sharpness" | "scanlineStrength"
+  ) => {
+    const box = document.querySelector(`[gbs-stepper="${kind}"]`) as HTMLElement | null;
+    if (!box) return;
 
-    const labels = () => [t('peak_off'), t('peak_normal'), t('peak_strong'), t('peak_max')];
-    const STORAGE_KEY = 'gbsc_peaking_level';
+    const labelEl = box.querySelector("[gbs-stepper-label]") as HTMLElement;
+    const barEl = box.querySelector("[gbs-stepper-bar]") as HTMLElement;
+    const barFillEl = box.querySelector("[gbs-stepper-bar-fill]") as HTMLElement;
+    const decBtn = box.querySelector("[gbs-stepper-dec]") as HTMLElement;
+    const incBtn = box.querySelector("[gbs-stepper-inc]") as HTMLElement;
+    const presetBtns = nodelistToArray<HTMLElement>(
+      box.querySelectorAll("[gbs-stepper-preset]")
+    );
 
-    // Initial-Guess aus localStorage, Fallback 1 (Normal)
-    let stored = parseInt(localStorage.getItem(STORAGE_KEY) ?? '1', 10);
-    if (isNaN(stored) || stored < 0 || stored > 3) stored = 1;
-    let level = stored;
+    const isSharpness = kind === "sharpness";
+    const MIN = 0;
+    const MAX = isSharpness ? 32 : 0x60;
+    const STEP = isSharpness ? 1 : 0x04;
+    // Value the scanlines come on with from "Off" (weakest visible lines)
+    const SCANLINES_WEAKEST = 0x60;
+    // Known presets: sharpness 0/22/32 (Weich/Normal/Stark),
+    // strength 0x50/0x30/0x10 (Leicht/Mittel/Stark)
+    // After a local click, status pings that may still carry the old value are
+    // ignored for a moment, so the display does not jump back and forth.
+    const HOLD_OFF_MS = 1500;
 
-    const updateLabel = () => {
-      const divs = peakingBtn.querySelectorAll('div');
-      if (divs.length >= 2) {
-        (divs[1] as HTMLElement).textContent = labels()[level];
+    let current = isSharpness ? 22 : 0x30;
+    // Scanlines only: are the lines switched on? (sharpness has no off position)
+    let on = isSharpness ? true : false;
+    let holdUntil = 0;
+
+    const presetValue = (btn: HTMLElement) =>
+      parseInt(btn.getAttribute("gbs-stepper-preset") || "", isSharpness ? 10 : 16);
+
+    // Label of the active preset; undefined -> "Custom" (without the value).
+    const presetName = (v: number) => {
+      for (const btn of presetBtns) {
+        if (presetValue(btn) === v) {
+          return (btn.textContent || "").trim();
+        }
       }
-      peakingBtn.setAttribute('gbs-peaking-level', String(level));
+      return undefined;
     };
-    updateLabel();
 
-    // Optimistisches Inkrement beim Klick; Device-Antwort korrigiert danach.
-    peakingBtn.addEventListener('click', () => {
-      level = (level + 1) % 4;
-      localStorage.setItem(STORAGE_KEY, String(level));
-      updateLabel();
+    const fmt = (v: number) => {
+      if (isSharpness) {
+        return String(v);
+      }
+      const hex = v.toString(16).toUpperCase();
+      return "0x" + (hex.length < 2 ? "0" + hex : hex);
+    };
+
+    // Bar fill: how strong the effect is right now.
+    //   sharpness: v / 32 (0 = empty = off, 32 = full)
+    //   scanlines: off = empty; on = 8/128 (0x60, weakest) ... 128/128 (0x00,
+    //   strongest) - the same formula as the OSD bar.
+    const fillRatio = () => {
+      if (isSharpness) {
+        return Math.min(1, Math.max(0, current / 32));
+      }
+      if (!on) {
+        return 0;
+      }
+      const shown = Math.min(0x60, Math.max(0, current));
+      return (8 + ((0x60 - shown) * 120) / 0x60) / 128;
+    };
+
+    const render = () => {
+      const name = presetName(current);
+      if (labelEl) {
+        labelEl.textContent =
+          !isSharpness && !on ? t("stepper_off") : name || t("stepper_custom_plain");
+      }
+      if (barFillEl) {
+        barFillEl.style.width = Math.round(fillRatio() * 100) + "%";
+      }
+      if (barEl) {
+        barEl.setAttribute("aria-valuenow", String(current));
+        barEl.setAttribute("aria-label", !isSharpness && !on ? t("stepper_off") : fmt(current));
+      }
+      presetBtns.forEach((btn) => {
+        if (presetValue(btn) === current && (isSharpness || on)) {
+          btn.setAttribute("active", "");
+        } else {
+          btn.removeAttribute("active");
+        }
+      });
+    };
+
+    // Scanlines: a strength value switches the lines on, 0x7f switches them off.
+    const SCANLINES_OFF_VALUE = 0x7f;
+    // One request at a time, latest value wins: while a HTTP fallback request
+    // is in flight, newer clicks only update the value to send afterwards
+    // instead of piling up parallel requests (each costs the ESP8266 ~1-2k of
+    // heap while alive; a burst is what starves it below the 10k guard and
+    // makes the whole web UI go mute).
+    let pendingSend: Promise<void> | null = null;
+    let queuedValue: number | null = null;
+    const httpSend = (v: number): Promise<void> => {
+      const url = isSharpness
+        ? `/gbs/set/sharpness?${v}`
+        : `/gbs/set/scanlinestrength?${v.toString(16)}`;
+      return fetch(`${url}&nocache=${new Date().getTime()}`)
+        .then((r) => {
+          if (!r.ok) {
+            // the endpoint answers 503 when the queue is full or the heap is
+            // too low for it to say so: surface it instead of pretending
+            throw new Error(`HTTP ${r.status}`);
+          }
+        })
+        .catch(() => {
+          GBSControl.queuedText += t("stepper_error");
+        })
+        .then(() => {
+          // ES6: no .finally; clears on success and error, then flushes a
+          // value that arrived while this request was in flight
+          pendingSend = null;
+          if (queuedValue !== null) {
+            const next = queuedValue;
+            queuedValue = null;
+            pendingSend = httpSend(next);
+          }
+        });
+    };
+    const send = (v: number) => {
+      const wire = isSharpness ? String(v) : v.toString(16);
+      if (sendWsValueCommand(isSharpness ? "Y" : "y", wire)) {
+        return; // tiny frame over the open socket, no HTTP request at all
+      }
+      if (pendingSend) {
+        queuedValue = v; // send after the in-flight request completes
+        return;
+      }
+      pendingSend = httpSend(v);
+    };
+
+    const apply = (value: number) => {
+      current = value;
+      on = true;
+      holdUntil = Date.now() + HOLD_OFF_MS;
+      render();
+      send(current);
+    };
+
+    const applyOff = () => {
+      on = false; // the strength is kept, the firmware keeps it too
+      holdUntil = Date.now() + HOLD_OFF_MS;
+      render();
+      send(SCANLINES_OFF_VALUE);
+    };
+
+    // + = stronger, - = weaker; clamp at the ends (no wrap-around).
+    // Scanlines: stronger = lower value, so + decreases the value there;
+    // sharpness: stronger = higher value, + increases it.
+    incBtn.addEventListener("click", () => {
+      if (isSharpness) {
+        if (current >= MAX) return;
+        apply(Math.min(MAX, current + STEP));
+      } else if (!on) {
+        apply(SCANLINES_WEAKEST); // off -> weakest visible lines
+      } else {
+        if (current <= MIN) return;
+        apply(Math.max(MIN, current - STEP));
+      }
+    });
+    decBtn.addEventListener("click", () => {
+      if (isSharpness) {
+        if (current <= MIN) return;
+        apply(Math.max(MIN, current - STEP));
+      } else {
+        if (!on) return; // already off
+        if (current >= MAX) {
+          applyOff(); // weakest -> off
+          return;
+        }
+        apply(Math.min(MAX, current + STEP));
+      }
     });
 
-    // Expose Setter für onmessage-Handler.
-    // Wird mit peakingLevel aus dem Status-Ping (Byte 6, Bits 0-1) aufgerufen.
-    (GBSControl as any).setPeakingLevel = (newLevel: number) => {
-      if (newLevel >= 0 && newLevel <= 3 && newLevel !== level) {
-        level = newLevel;
-        localStorage.setItem(STORAGE_KEY, String(level));
-        updateLabel();
-      }
+    presetBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        apply(presetValue(btn));
+      });
+    });
+
+    render();
+
+    return {
+      // re-render after a language change (applyI18n)
+      render,
+      set(value: number, isOn?: boolean) {
+        if (Date.now() < holdUntil) return;
+        if (!(value >= MIN && value <= MAX)) return;
+        current = value;
+        if (!isSharpness && isOn !== undefined) {
+          on = isOn;
+        }
+        render();
+      },
     };
-  })();
+  };
+
+  (GBSControl as any).sharpnessStepper = initValueStepper("sharpness");
+  (GBSControl as any).scanlineStrengthStepper = initValueStepper("scanlineStrength");
+
+  // onmessage setters: bytes 7/8 of the status ping
+  (GBSControl as any).setSharpnessStepper = (value: number) => {
+    (GBSControl as any).sharpnessStepper?.set?.(value);
+  };
+  (GBSControl as any).setScanlineStrengthStepper = (value: number, isOn?: boolean) => {
+    (GBSControl as any).scanlineStrengthStepper?.set?.(value, isOn);
+  };
 };
 
 const initClearButton = () => {

@@ -14,6 +14,7 @@
 #include "../core/options.h"
 #include "../gbs/tv5725.h"
 #include "../core/slot.h"
+#include "../commands/UserCommandHandler.h"
 #include "../../lib/WebSockets/WebSockets.h"
 #include "../../lib/WebSockets/WebSocketsServer.h"
 #include "../data/fonts.h"
@@ -146,16 +147,16 @@ bool presetSelectionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
         return false;
     }
     uopt->presetSlot = slotIndexMap[item->tag];
-    uopt->presetPreference = PresetPreference::OutputCustomized;
+    // The preset loader reads the slot character from preferencesv2.txt (not from
+    // uopt->presetSlot), so the selection has to be written before the load - exactly
+    // what the WebUI does with /slot/set before it sends command '3'.
     saveUserPrefs();
-    if (rto->videoStandardInput == 14) {
-        // vga upscale path: let synwatcher handle it
-        rto->videoStandardInput = 15;
-    } else {
-        // normal path
-        applyPresets(rto->videoStandardInput);
-    }
-    saveUserPrefs();
+    // Load the preset exactly like the WebUI does (command '3' = "load custom preset"):
+    // besides applyPresets() this restores the scanlines stored in the preset file (or the
+    // slot data for older presets), handles the VGA upscale path and saves the preferences.
+    // Calling applyPresets() directly skipped the scanline restore, so a preset that
+    // differs from the current one only in its scanlines looked like "nothing happened".
+    handleType2Command('3');
     manager->freeze();
     oledMenuFreezeTimeoutInMS = 2000;
     oledMenuFreezeStartTime = millis();
@@ -181,39 +182,43 @@ static bool isValidSlotName(const char *name, size_t maxLen) {
 
 bool presetsCreationMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OLEDMenuNav, bool)
 {
-    // Static statt Heap/Stack: im BSS, ueberlebt den Funktionsaufruf,
-    // keine dangling Zeiger wenn registerItem nur den Pointer speichert
-    static SlotMetaArray slotsObject;
+    // The menu items only keep a pointer to their text, so the names of the shown slots
+    // must outlive this call: one small static table (16 x 25 bytes) instead of the whole
+    // 72-slot array (2.3 KB) that used to sit in RAM permanently. The file is read record
+    // by record; slots beyond the first OLED_MENU_MAX_SUBITEMS_NUM valid ones are only counted.
+    static char slotNames[OLED_MENU_MAX_SUBITEMS_NUM][sizeof(SlotMeta::name)];
+    static uint8_t slotTags[OLED_MENU_MAX_SUBITEMS_NUM];
 
     File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
     manager->clearSubItems(item);
-    int curNumSlot = 0;
-    bool tooManySlots = false;
+    int usedSlots = 0;
+    int stored = 0;
     if (slotsBinaryFileRead) {
-        slotsBinaryFileRead.read((byte *)&slotsObject, sizeof(slotsObject));
-        slotsBinaryFileRead.close();
-
-        // Erst zaehlen. Passen nicht alle Slots in das Untermenue, bleibt ein Eintrag
-        // fuer den Hinweis frei - sonst loest der Hinweis als 17. Untereintrag
-        // den Panic "Maximum number of sub items reached" aus.
-        int usedSlots = 0;
+        SlotMeta slot;
         for (int i = 0; i < SLOTS_TOTAL; ++i) {
-            const SlotMeta &slot = slotsObject.slot[i];
-            if (isValidSlotName(slot.name, sizeof(slot.name))) {
-                usedSlots++;
+            if (slotsBinaryFileRead.read((byte *)&slot, sizeof(slot)) != sizeof(slot)) {
+                break; // short or damaged file: show what could be read
             }
-        }
-        tooManySlots = usedSlots > OLED_MENU_MAX_SUBITEMS_NUM;
-        const int maxShown = tooManySlots ? OLED_MENU_MAX_SUBITEMS_NUM - 1 : OLED_MENU_MAX_SUBITEMS_NUM;
-
-        for (int i = 0; i < SLOTS_TOTAL && curNumSlot < maxShown; ++i) {
-            const SlotMeta &slot = slotsObject.slot[i];
             if (!isValidSlotName(slot.name, sizeof(slot.name))) {
                 continue;
             }
-            curNumSlot++;
-            manager->registerItem(item, slot.slot, slot.name, presetSelectionMenuHandler);
+            usedSlots++;
+            if (stored < OLED_MENU_MAX_SUBITEMS_NUM) {
+                memcpy(slotNames[stored], slot.name, sizeof(slot.name));
+                slotTags[stored] = slot.slot;
+                stored++;
+            }
         }
+        slotsBinaryFileRead.close();
+    }
+
+    // If not all slots fit into the submenu, one entry stays free for the hint -
+    // otherwise the hint would be a 17th sub item and trigger the panic
+    // "Maximum number of sub items reached".
+    const bool tooManySlots = usedSlots > OLED_MENU_MAX_SUBITEMS_NUM;
+    const int maxShown = tooManySlots ? OLED_MENU_MAX_SUBITEMS_NUM - 1 : OLED_MENU_MAX_SUBITEMS_NUM;
+    for (int i = 0; i < stored && i < maxShown; ++i) {
+        manager->registerItem(item, slotTags[i], slotNames[i], presetSelectionMenuHandler);
     }
 
     if (tooManySlots) {

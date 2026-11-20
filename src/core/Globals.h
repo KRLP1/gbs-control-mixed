@@ -17,6 +17,7 @@
 #include "../config/Config.h"
 #include "../web/SerialMirror.h"
 #include "../commands/CommandQueue.h"
+#include "../commands/ValueCommandQueue.h"
 
 // Forward declarations (if needed for other types)
 
@@ -97,6 +98,7 @@ extern char serialCommand;
 extern char userCommand;
 extern CommandQueue serialCommandQueue;
 extern CommandQueue userCommandQueue;
+extern ValueCommandQueue userValueQueue;
 
 // Other global variables
 extern String slotIndexMap;

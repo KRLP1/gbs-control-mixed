@@ -693,15 +693,6 @@
                   <div>Scanlines</div>
                 </button>
                 <button
-                  gbs-message="K"
-                  gbs-message-type="user"
-                  gbs-click="normal"
-                  class="gbs-button gbs-button__control"
-                >
-                  <div class="gbs-icon">gradientbolt</div>
-                  <div data-i18n="btn_intensity">Intensität</div>
-                </button>
-                <button
                   gbs-message="m"
                   gbs-message-type="user"
                   gbs-click="normal"
@@ -716,8 +707,38 @@
                 <!-- prettier-ignore -->
                 <li data-i18n="help_filters_1">Scanlines funktionieren nur bei 240p-Quellen oder bei 480i mit Bob-Deinterlacing.</li>
                 <li data-i18n="help_filters_2">Der Linienfilter beseitigt blockartige Pixelartefakte beim Hochskalieren über 480p hinaus und wird empfohlen.</li>
+                <li data-i18n="help_scanline_strength">Scanline-Intensität: 0x00 (größte Linien) bis 0x60 (feinste Linien), in feinen 0x04-Schritten nahezu stufenlos. + macht die Linien stärker (Wert runter), − schwächer (Wert rauf). − auf der schwächsten Stufe schaltet die Scanlines aus (leerer Balken), + von „Aus“ schaltet sie wieder ein. „Custom“ steht über dem Balken, wenn der Wert keiner Vorgabe entspricht. Die Einstellung wird mit dem Preset gespeichert.</li>
               </ul>
-              <div class="gbs-flex">
+              <div class="gbs-flex gbs-stepper__row-flex gbs-margin__bottom--16">
+                <div class="gbs-stepper" gbs-stepper="scanlineStrength">
+                  <div class="gbs-stepper__row">
+                    <button class="gbs-button gbs-stepper__btn" gbs-stepper-dec type="button" data-i18n-attr="title:step_weaker" title="−">
+                      <div class="gbs-icon">remove_circle_outline</div>
+                    </button>
+                    <div class="gbs-stepper__mid">
+                      <div class="gbs-stepper__label" gbs-stepper-label>Mittel</div>
+                      <div class="gbs-stepper__bar" gbs-stepper-bar role="progressbar" aria-valuemin="0" aria-valuemax="96">
+                        <div class="gbs-stepper__bar-fill" gbs-stepper-bar-fill></div>
+                      </div>
+                    </div>
+                    <button class="gbs-button gbs-stepper__btn" gbs-stepper-inc type="button" data-i18n-attr="title:step_stronger" title="+">
+                      <div class="gbs-icon">add_circle_outline</div>
+                    </button>
+                  </div>
+                  <div class="gbs-stepper__presets">
+                    <button class="gbs-button gbs-stepper__preset" gbs-stepper-preset="0x50" type="button">
+                      <div data-i18n="preset_light">Leicht</div>
+                    </button>
+                    <button class="gbs-button gbs-stepper__preset" gbs-stepper-preset="0x30" type="button">
+                      <div data-i18n="preset_medium">Mittel</div>
+                    </button>
+                    <button class="gbs-button gbs-stepper__preset" gbs-stepper-preset="0x10" type="button">
+                      <div data-i18n="preset_strong">Stark</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="gbs-flex gbs-margin__bottom--16">
                 <button
                   gbs-message="f"
                   gbs-message-type="action"
@@ -727,15 +748,6 @@
                 >
                   <div class="gbs-icon">blur_linear</div>
                   <div data-i18n="btn_peaking">Kantenanhebung</div>
-                </button>
-                <button
-                  gbs-message="8"
-                  gbs-message-type="user"
-                  gbs-click="normal"
-                  class="gbs-button gbs-button__control"
-                >
-                  <div class="gbs-icon">tune</div>
-                  <div data-i18n="btn_peaking_level">Peaking-Stufe</div>
                 </button>
                 <button
                   gbs-message="V"
@@ -751,9 +763,38 @@
               <ul class="gbs-help">
                 <!-- prettier-ignore -->
                 <li data-i18n="help_peaking_1">Kantenanhebung erhöht den Kontrast an horizontalen Helligkeitssprüngen und wird empfohlen.</li>
-                <li data-i18n="help_peaking_2">Peaking-Stufe wählt die Intensität der Kantenanhebung: Aus, Normal, Stark oder Max.</li>
+                <li data-i18n="help_sharpness">Schärfe-Regler: 0 bis 32 (0 = Weich/aus, 22 = Normal, 32 = Stark); + und − in Einzelschritten, der Balken zeigt die Stärke, „Custom“ steht über dem Balken, wenn von Hand verstellt.</li>
                 <li data-i18n="help_peaking_3">Sprungantwort erhöht die Schärfe an horizontalen Farbsprüngen und wird empfohlen.</li>
               </ul>
+              <div class="gbs-flex gbs-stepper__row-flex">
+                <div class="gbs-stepper" gbs-stepper="sharpness">
+                  <div class="gbs-stepper__row">
+                    <button class="gbs-button gbs-stepper__btn" gbs-stepper-dec type="button" data-i18n-attr="title:step_weaker" title="−">
+                      <div class="gbs-icon">remove_circle_outline</div>
+                    </button>
+                    <div class="gbs-stepper__mid">
+                      <div class="gbs-stepper__label" gbs-stepper-label>Normal</div>
+                      <div class="gbs-stepper__bar" gbs-stepper-bar role="progressbar" aria-valuemin="0" aria-valuemax="32">
+                        <div class="gbs-stepper__bar-fill" gbs-stepper-bar-fill></div>
+                      </div>
+                    </div>
+                    <button class="gbs-button gbs-stepper__btn" gbs-stepper-inc type="button" data-i18n-attr="title:step_stronger" title="+">
+                      <div class="gbs-icon">add_circle_outline</div>
+                    </button>
+                  </div>
+                  <div class="gbs-stepper__presets">
+                    <button class="gbs-button gbs-stepper__preset" gbs-stepper-preset="0" type="button">
+                      <div data-i18n="preset_soft">Weich</div>
+                    </button>
+                    <button class="gbs-button gbs-stepper__preset" gbs-stepper-preset="22" type="button">
+                      <div data-i18n="preset_normal">Normal</div>
+                    </button>
+                    <button class="gbs-button gbs-stepper__preset" gbs-stepper-preset="32" type="button">
+                      <div data-i18n="preset_sharp">Stark</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </fieldset>
           <fieldset class="gbs-fieldset filters">

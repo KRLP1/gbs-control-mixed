@@ -1,4 +1,5 @@
 #include "SlotManager.h"
+#include "PresetTrailer.h"
 #include "../core/Globals.h"
 #include "../web/SerialMirror.h"
 #include "../gbs/GBSRegister.h"
@@ -9,6 +10,12 @@
 #include "../gbs/tv5725.h"
 #include <LittleFS.h>
 #include <string.h>
+
+// Set by the "load custom preset" command right before applyPresets(): the next preset
+// file that is read successfully applies the scanline settings stored in it. Automatic
+// reloads (source change, resync) leave it false and never touch the live settings.
+bool presetScanlinesRestorePending = false;
+bool presetScanlinesRestored = false; // the last restore request found a scanline line
 
 void StrClear(char *str, uint16_t length)
 {
@@ -23,6 +30,7 @@ const uint8_t *loadPresetFromLittleFS(byte forVideoMode)
     String s = "";
     Ascii8 slot = 0;
     File f;
+    PresetScanlineTrailer trailer = {false, false, 0};
 
     f = LittleFS.open("/preferencesv2.txt", "r");
     if (f) {
@@ -76,6 +84,11 @@ const uint8_t *loadPresetFromLittleFS(byte forVideoMode)
     } else {
         SerialM.println(f.name());
         s = f.readStringUntil('}');
+        // what is left of the file behind the '}' (";" + the scanline line, if any)
+        char tail[40];
+        size_t tailLen = f.readBytes(tail, sizeof(tail) - 1);
+        tail[tailLen] = '\0';
+        trailer = parsePresetScanlineTrailer(tail);
         f.close();
     }
 
@@ -104,6 +117,18 @@ const uint8_t *loadPresetFromLittleFS(byte forVideoMode)
             return pal_240p;
         else
             return ntsc_240p;
+    }
+
+    // The file is good. If the user asked for a preset load, the scanlines come with it,
+    // like the sharpness does through the register dump.
+    if (presetScanlinesRestorePending) {
+        presetScanlinesRestorePending = false;
+        if (trailer.valid) {
+            applyScanlineState(trailer.on, trailer.strength, false);
+            SerialM.print(F("preset scanlines: "));
+            SerialM.println(trailer.on ? F("on") : F("off"));
+            presetScanlinesRestored = true;
+        }
     }
 
     return preset;
@@ -237,6 +262,12 @@ void savePresetToLittleFS()
             }
         }
         f.println("};");
+        // scanline settings ride behind the register dump (segment 2 is not dumped),
+        // see PresetTrailer.h. wantScanlines is untouched by the disableScanlines() above.
+        f.print("S,");
+        f.print(uopt->wantScanlines ? 1 : 0);
+        f.print(",");
+        f.println(uopt->scanlineStrength > 0x60 ? 0x60 : uopt->scanlineStrength);
         SerialM.print(F("preset saved as: "));
         SerialM.println(f.name());
         f.close();

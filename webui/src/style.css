@@ -250,28 +250,111 @@ body {
   text-align: right;
 }
 
-/* Peaking-Stufe: gestufter Fuellbalken statt reinem An/Aus, zeigt 0-3 */
-[gbs-peaking-level]::after {
-  background-color: var(--color-primary);
-  bottom: 0;
-  content: "";
-  height: 3px;
-  left: 0;
-  position: absolute;
-  transition: width 0.3s ease;
+/* Value stepper (sharpness 0-32, scanline strength 0x00-0x60): lives in its
+   own .gbs-flex row below the button row (NOT inside it - the control
+   buttons are 84x68px each and a row is only ~380px wide). Compact -/+ /
+   bar line plus preset buttons underneath. Between the buttons sits a level
+   bar: primary (turquoise) border, fill in the exact yellow of an active
+   secondary button (rgba(secondary, 0.7)), half the button height. The
+   -/+ buttons are 44x44px squares with the add_circle_outline /
+   remove_circle_outline icons (same circle icons as the brightness/gain
+   buttons), centered in the button. The preset name (or "Custom", without
+   the value; "Off" when the scanlines are off) sits in the middle column
+   directly on top of the bar, centered over it. */
+.gbs-stepper {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* middle column between the -/+ buttons: label directly above the bar.
+   Height budget: 14px label + 2px gap + 22px bar + 2x2px bar margin = 42px,
+   which fits next to the 44px buttons (48px with their margin). */
+.gbs-stepper__mid {
+  align-self: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.gbs-stepper__label {
+  color: var(--color-silver-chalice);
+  font-size: 14px;
+  font-weight: 300;
+  height: 14px;
+  line-height: 14px;
+  margin: 0 2px 2px;
+  overflow: hidden;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.gbs-stepper__row {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.gbs-stepper__btn {
+  align-items: center;
+  display: flex;
+  flex: 0 0 44px;
+  height: 44px;
+  justify-content: center;
+  margin: 2px;
+  padding: 0;
+}
+
+.gbs-stepper__btn .gbs-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.gbs-stepper__bar {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--color-primary);
+  border-radius: 3px;
+  box-sizing: border-box; /* the 22px are the OUTER height: half of the 44px buttons */
+  display: flex;
+  flex: 0 0 auto;
+  height: 22px;
+  margin: 2px;
+  overflow: hidden;
+  padding: 2px;
+}
+
+.gbs-stepper__bar-fill {
+  /* exact yellow of an active secondary button (Scanlines on): the CSS
+     variable is #eab638, the active button uses it at 0.7 alpha */
+  background-color: rgba(var(--color-secondary-rgba), 0.7);
+  border-radius: 2px;
+  height: 100%;
+  transition: width 120ms linear;
   width: 0%;
 }
 
-[gbs-peaking-level="1"]::after {
-  width: 33%;
+.gbs-stepper__presets {
+  display: flex;
+  gap: 4px;
 }
 
-[gbs-peaking-level="2"]::after {
-  width: 66%;
+.gbs-stepper__preset {
+  flex: 1 1 0;
+  height: 34px;
+  margin: 2px;
+  min-width: 0;
+  padding: 0 2px;
+  position: relative;
+  text-align: center;
 }
 
-[gbs-peaking-level="3"]::after {
-  width: 100%;
+.gbs-stepper__preset[active] {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* menu */

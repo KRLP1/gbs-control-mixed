@@ -42,23 +42,32 @@ static const String webUiEtag = []() {
     return e;
 }();
 
+// Lowest free heap (bytes) at which the handlers still start a LittleFS write
+// (/slot/set, /slot/save). The generous 10k gates were far above what a write needs and
+// hid the slot list exactly when the heap was low; this floor only prevents running out of
+// memory inside the write.
+static const uint32_t HEAP_FLOOR_FS_WRITE = 4000;
+
 // Scratch buffer for the slot metadata file, used by the web handlers that read or rewrite it.
-// At SLOTS_TOTAL entries this is 2304 bytes: far too much for the stack of an async web handler on
-// this part, and too much to hold onto permanently either - the websocket log stands down when
-// free heap runs low, and 2.3k is the whole margin on a board that idles near that line. So it
-// lives only for as long as a handler is working with it. The handlers never overlap:
-// ESPAsyncWebServer dispatches them one at a time from the network stack.
+// At SLOTS_TOTAL entries this is 2304 bytes: too much for the stack of an async web handler on
+// this part. It used to be new/delete per request, which churned 2.3k of heap every slot
+// operation (LittleFS file objects + response buffers allocate around it): after a few
+// /slot/save round trips the small-block heap fragmented enough to starve the websocket log
+// and push the free heap below the 10k guards of the other handlers - restart/reset/backup
+// then answered "false" until the heap slowly recovered. A static buffer in BSS fixes the
+// fragmentation; the handlers are dispatched one at a time from the network stack, so no
+// locking is needed.
+static SlotMetaArray slotsScratch;
+
+// Pointer into slotsScratch while a handler scope holds it (see SlotsScratch).
 static SlotMetaArray *slotsObject = nullptr;
 
-// Holds the slot scratch buffer for the enclosing scope. Declare one at the top of a handler and
-// check ok() before touching slotsObject; the buffer is released however the handler returns.
+// Holds a reference to the static scratch buffer for the enclosing scope. Declare one at
+// the top of a handler and check ok() before touching slotsObject (kept as the name the
+// handler bodies already use, so they read unchanged).
 struct SlotsScratch {
-    SlotsScratch() { slotsObject = new SlotMetaArray(); }
-    ~SlotsScratch()
-    {
-        delete slotsObject;
-        slotsObject = nullptr;
-    }
+    SlotsScratch() { slotsObject = &slotsScratch; }
+    ~SlotsScratch() { slotsObject = nullptr; }
     bool ok() const { return slotsObject != nullptr; }
 };
 
@@ -128,42 +137,46 @@ void startWebserver()
     });
 
     server.on("/sc", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (ESP.getFreeHeap() > 10000) {
-            int params = request->params();
-            //Serial.print("got serial request params: ");
-            //Serial.println(params);
-            if (params > 0) {
-                const AsyncWebParameter *p = request->getParam(0);
-                //Serial.println(p->name());
-                char cmd = p->name().charAt(0);
-                if (cmd == ' ') cmd = '+';  // hack, problem with '+' command received via url param
-                if (!serialCommandQueue.push(cmd)) {
-                    SerialM.deferLog(F("Warning: serial command queue full, dropping\n"));
-                }
+        // Same rationale as /uc: queueing one character must not depend on the
+        // free heap - the recovery commands the user reaches for when the heap
+        // is low all run through here too.
+        int params = request->params();
+        //Serial.print("got serial request params: ");
+        //Serial.println(params);
+        if (params > 0) {
+            const AsyncWebParameter *p = request->getParam(0);
+            //Serial.println(p->name());
+            char cmd = p->name().charAt(0);
+            if (cmd == ' ') cmd = '+';  // hack, problem with '+' command received via url param
+            if (!serialCommandQueue.push(cmd)) {
+                SerialM.deferLog(F("Warning: serial command queue full, dropping\n"));
             }
             request->send(200); // reply
         } else {
-            // low heap: answer anyway, otherwise the client waits for its timeout
-            request->send(503);
+            request->send(503); // no command to queue at all
         }
     });
 
     server.on("/uc", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (ESP.getFreeHeap() > 10000) {
-            int params = request->params();
-            //Serial.print("got user request params: ");
-            //Serial.println(params);
-            if (params > 0) {
-                const AsyncWebParameter *p = request->getParam(0);
-                //Serial.println(p->name());
-                if (!userCommandQueue.push(p->name().charAt(0))) {
-                    SerialM.deferLog(F("Warning: user command queue full, dropping\n"));
-                }
+        // Restart/reset/preset-save commands ride this endpoint. The old 10k heap
+        // gate here refused exactly the commands the user needs to recover from a
+        // low-heap state (and the WebUI showed no error for the 503): pushing one
+        // character into the queue costs a few bytes of stack, and the plain
+        // 200/503 replies below allocate far less than a slots.bin rebuild, so the
+        // command queueing runs unconditionally now. Only the payload-less reply
+        // stays the same in both branches.
+        int params = request->params();
+        //Serial.print("got user request params: ");
+        //Serial.println(params);
+        if (params > 0) {
+            const AsyncWebParameter *p = request->getParam(0);
+            //Serial.println(p->name());
+            if (!userCommandQueue.push(p->name().charAt(0))) {
+                SerialM.deferLog(F("Warning: user command queue full, dropping\n"));
             }
             request->send(200); // reply
         } else {
-            // low heap: answer anyway, otherwise the client waits for its timeout
-            request->send(503);
+            request->send(503); // no command to queue at all
         }
     });
 
@@ -233,16 +246,123 @@ void startWebserver()
         }
     });
     server.on("/bin/slots.bin", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (ESP.getFreeHeap() > 10000) {
+        // Static scratch buffer (see slotsScratch above): no heap allocation,
+        // so the old 10k gate here only managed to hide the slot names behind a
+        // "false" answer right when the heap was low - which is exactly when the
+        // WebUI reloads the slots after a save and shows them as empty.
+        SlotsScratch scratch;
+        if (!scratch.ok()) {
+            request->send(200, "application/json", "false");
+            return;
+        }
+        File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
+
+        if (!slotsBinaryFileRead) {
+            File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
+            for (int i = 0; i < SLOTS_TOTAL; i++) {
+                slotsObject->slot[i].slot = i;
+                slotsObject->slot[i].presetID = 0;
+                slotsObject->slot[i].scanlines = 0;
+                slotsObject->slot[i].scanlinesStrength = 0;
+                slotsObject->slot[i].wantVdsLineFilter = false;
+                slotsObject->slot[i].wantStepResponse = true;
+                slotsObject->slot[i].wantPeaking = true;
+                strncpy(slotsObject->slot[i].name, EMPTY_SLOT_NAME, 25);
+            }
+            slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
+            slotsBinaryFileWrite.close();
+        } else {
+            slotsBinaryFileRead.close();
+        }
+
+        request->send(LittleFS, "/slots.bin", "application/octet-stream");
+    });
+
+    server.on("/slot/set", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Same rationale as /uc: slot selection is a one-character state
+        // change plus a single LittleFS write - it must work while the heap is
+        // low, otherwise the WebUI cannot even prepare a preset save. Only a floor
+        // far below the old 10k gate stays: the LittleFS write itself needs about a
+        // kilobyte, and below this the system is about to fail anyway.
+        bool result = false;
+
+        int params = request->params();
+
+        if (params > 0 && ESP.getFreeHeap() > HEAP_FLOOR_FS_WRITE) {
+            const AsyncWebParameter *slotParam = request->getParam(0);
+            String slotParamValue = slotParam->value();
+            char slotValue[2];
+            slotParamValue.toCharArray(slotValue, sizeof(slotValue));
+            // Same whitelist as the boot path. An empty value (or %00) gives
+            // slotValue[0] == 0, which String::indexOf() would find as the
+            // terminator, so it has to be excluded explicitly.
+            if (slotParamValue.length() > 0 && slotValue[0] != '\0' &&
+                slotIndexMap.indexOf(slotValue[0]) >= 0) {
+                uopt->presetSlot = (uint8_t)slotValue[0];
+                uopt->presetPreference = OutputCustomized;
+                saveUserPrefs();
+                result = true;
+            }
+        }
+
+        request->send(200, "application/json", result ? "true" : "false");
+    });
+
+    server.on("/slot/save", HTTP_GET, [](AsyncWebServerRequest *request) {
+        bool result = false;
+
+        // Static scratch buffer (see slotsScratch above): this handler's real
+        // cost is two LittleFS writes and one read, not heap - the old 10k gate
+        // only refused the preset save when the heap was already low, which was
+        // the state the user was trying to fix by saving a preset.
+        int params = request->params();
+
+        // same floor as /slot/set: far below the old 10k gate, only so that an
+        // out-of-memory inside the LittleFS write cannot reset the device
+        if (params >= 2 && ESP.getFreeHeap() > HEAP_FLOOR_FS_WRITE) {
+            // index param - benannt statt positional: Reihenfolge- und
+            // Parameter-Unabhängigkeit (z.B. Cache-Buster am Ende).
+            // WICHTIG: Validierung VOR jedem LittleFS-Zugriff weiter unten.
+            const AsyncWebParameter *slotIndexParam = request->getParam("index");
+            if (slotIndexParam == nullptr) {
+                goto fail;
+            }
+            const long slotIndexValue = slotIndexParam->value().toInt();
+            if (slotIndexValue < 0 || slotIndexValue >= SLOTS_TOTAL) {
+                goto fail;
+            }
+            const uint8_t slotIndex = static_cast<uint8_t>(slotIndexValue);
+
+            // name param
+            const AsyncWebParameter *slotNameParam = request->getParam("name");
+            if (slotNameParam == nullptr) {
+                goto fail;
+            }
+            String slotName = slotNameParam->value();
+            if (!slotName.length()) {
+                goto fail; // leerer Name: Slot nicht unbenannt überschreiben
+            }
+
             SlotsScratch scratch;
             if (!scratch.ok()) {
                 request->send(200, "application/json", "false");
                 return;
             }
             File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
+            size_t slotsRead = slotsBinaryFileRead
+                ? slotsBinaryFileRead.read((byte *)slotsObject, sizeof(*slotsObject))
+                : 0;
+            if (slotsBinaryFileRead) {
+                slotsBinaryFileRead.close();
+            }
 
-            if (!slotsBinaryFileRead) {
+            // A file that is missing, truncated or written by a build with a different
+            // SLOTS_TOTAL leaves part of slotsObject as stack garbage - and the whole struct
+            // is written back below, so that garbage would become the new slot file.
+            // Rebuild from scratch rather than persisting it.
+            if (slotsRead != sizeof(*slotsObject)) {
                 File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
+
                 for (int i = 0; i < SLOTS_TOTAL; i++) {
                     slotsObject->slot[i].slot = i;
                     slotsObject->slot[i].presetID = 0;
@@ -253,129 +373,28 @@ void startWebserver()
                     slotsObject->slot[i].wantPeaking = true;
                     strncpy(slotsObject->slot[i].name, EMPTY_SLOT_NAME, 25);
                 }
+
                 slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
                 slotsBinaryFileWrite.close();
-            } else {
-                slotsBinaryFileRead.close();
             }
 
-            request->send(LittleFS, "/slots.bin", "application/octet-stream");
-        } else {
-            // low heap: same answer as the scratch allocation failure above
-            request->send(200, "application/json", "false");
-        }
-    });
+            char emptySlotName[25] = "                        ";
+            strncpy(slotsObject->slot[slotIndex].name, emptySlotName, 25);
 
-    server.on("/slot/set", HTTP_GET, [](AsyncWebServerRequest *request) {
-        bool result = false;
+            slotsObject->slot[slotIndex].slot = slotIndex;
+            slotName.toCharArray(slotsObject->slot[slotIndex].name, sizeof(slotsObject->slot[slotIndex].name));
+            slotsObject->slot[slotIndex].presetID = rto->presetID;
+            slotsObject->slot[slotIndex].scanlines = uopt->wantScanlines;
+            slotsObject->slot[slotIndex].scanlinesStrength = uopt->scanlineStrength;
+            slotsObject->slot[slotIndex].wantVdsLineFilter = uopt->wantVdsLineFilter;
+            slotsObject->slot[slotIndex].wantStepResponse = uopt->wantStepResponse;
+            slotsObject->slot[slotIndex].wantPeaking = uopt->wantPeaking;
 
-        if (ESP.getFreeHeap() > 10000) {
-            int params = request->params();
+            File slotsBinaryOutputFile = LittleFS.open(SLOTS_FILE, "w");
+            slotsBinaryOutputFile.write((byte *)slotsObject, sizeof(*slotsObject));
+            slotsBinaryOutputFile.close();
 
-            if (params > 0) {
-                const AsyncWebParameter *slotParam = request->getParam(0);
-                String slotParamValue = slotParam->value();
-                char slotValue[2];
-                slotParamValue.toCharArray(slotValue, sizeof(slotValue));
-                // Same whitelist as the boot path. An empty value (or %00) gives
-                // slotValue[0] == 0, which String::indexOf() would find as the
-                // terminator, so it has to be excluded explicitly.
-                if (slotParamValue.length() > 0 && slotValue[0] != '\0' &&
-                    slotIndexMap.indexOf(slotValue[0]) >= 0) {
-                    uopt->presetSlot = (uint8_t)slotValue[0];
-                    uopt->presetPreference = OutputCustomized;
-                    saveUserPrefs();
-                    result = true;
-                }
-            }
-        }
-
-        request->send(200, "application/json", result ? "true" : "false");
-    });
-
-    server.on("/slot/save", HTTP_GET, [](AsyncWebServerRequest *request) {
-        bool result = false;
-
-        if (ESP.getFreeHeap() > 10000) {
-            int params = request->params();
-
-            if (params >= 2) {
-                // index param - benannt statt positional: Reihenfolge- und
-                // Parameter-Unabhängigkeit (z.B. Cache-Buster am Ende).
-                // WICHTIG: Validierung VOR jedem LittleFS-Zugriff weiter unten.
-                const AsyncWebParameter *slotIndexParam = request->getParam("index");
-                if (slotIndexParam == nullptr) {
-                    goto fail;
-                }
-                const long slotIndexValue = slotIndexParam->value().toInt();
-                if (slotIndexValue < 0 || slotIndexValue >= SLOTS_TOTAL) {
-                    goto fail;
-                }
-                const uint8_t slotIndex = static_cast<uint8_t>(slotIndexValue);
-
-                // name param
-                const AsyncWebParameter *slotNameParam = request->getParam("name");
-                if (slotNameParam == nullptr) {
-                    goto fail;
-                }
-                String slotName = slotNameParam->value();
-                if (!slotName.length()) {
-                    goto fail; // leerer Name: Slot nicht unbenannt überschreiben
-                }
-
-                SlotsScratch scratch;
-                if (!scratch.ok()) {
-                    request->send(200, "application/json", "false");
-                    return;
-                }
-                File slotsBinaryFileRead = LittleFS.open(SLOTS_FILE, "r");
-                size_t slotsRead = slotsBinaryFileRead
-                    ? slotsBinaryFileRead.read((byte *)slotsObject, sizeof(*slotsObject))
-                    : 0;
-                if (slotsBinaryFileRead) {
-                    slotsBinaryFileRead.close();
-                }
-
-                // A file that is missing, truncated or written by a build with a different
-                // SLOTS_TOTAL leaves part of slotsObject as stack garbage - and the whole struct
-                // is written back below, so that garbage would become the new slot file.
-                // Rebuild from scratch rather than persisting it.
-                if (slotsRead != sizeof(*slotsObject)) {
-                    File slotsBinaryFileWrite = LittleFS.open(SLOTS_FILE, "w");
-
-                    for (int i = 0; i < SLOTS_TOTAL; i++) {
-                        slotsObject->slot[i].slot = i;
-                        slotsObject->slot[i].presetID = 0;
-                        slotsObject->slot[i].scanlines = 0;
-                        slotsObject->slot[i].scanlinesStrength = 0;
-                        slotsObject->slot[i].wantVdsLineFilter = false;
-                        slotsObject->slot[i].wantStepResponse = true;
-                        slotsObject->slot[i].wantPeaking = true;
-                        strncpy(slotsObject->slot[i].name, EMPTY_SLOT_NAME, 25);
-                    }
-
-                    slotsBinaryFileWrite.write((byte *)slotsObject, sizeof(*slotsObject));
-                    slotsBinaryFileWrite.close();
-                }
-
-                char emptySlotName[25] = "                        ";
-                strncpy(slotsObject->slot[slotIndex].name, emptySlotName, 25);
-
-                slotsObject->slot[slotIndex].slot = slotIndex;
-                slotName.toCharArray(slotsObject->slot[slotIndex].name, sizeof(slotsObject->slot[slotIndex].name));
-                slotsObject->slot[slotIndex].presetID = rto->presetID;
-                slotsObject->slot[slotIndex].scanlines = uopt->wantScanlines;
-                slotsObject->slot[slotIndex].scanlinesStrength = uopt->scanlineStrength;
-                slotsObject->slot[slotIndex].wantVdsLineFilter = uopt->wantVdsLineFilter;
-                slotsObject->slot[slotIndex].wantStepResponse = uopt->wantStepResponse;
-                slotsObject->slot[slotIndex].wantPeaking = uopt->wantPeaking;
-
-                File slotsBinaryOutputFile = LittleFS.open(SLOTS_FILE, "w");
-                slotsBinaryOutputFile.write((byte *)slotsObject, sizeof(*slotsObject));
-                slotsBinaryOutputFile.close();
-
-                result = true;
-            }
+            result = true;
         }
 
         fail:
@@ -396,9 +415,8 @@ void startWebserver()
             }
             else
             {
-                // ROOT-CAUSE FIX: allocate the slot metadata buffer.
-                // The original port missed this allocation here, leaving slotsObject
-                // as nullptr, which made the file read below always fail.
+                // Static scratch buffer (slotsScratch): the old new/delete per
+                // request fragmented the heap after a few slot operations.
                 SlotsScratch scratch;
                 if (!scratch.ok()) {
                     request->send(200, "application/json", "false");
@@ -511,65 +529,104 @@ void startWebserver()
         });
 
     server.on("/filesystem/download", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (ESP.getFreeHeap() > 10000) {
-            // On ESP32 query parameter ordering and
-            // unnamed params (e.g. cache-busters like "&176...") can make getParam(0) unreliable.
-            // Always resolve the file path by *name*.
-            if (request->hasParam("file")) {
-                String path = request->getParam("file")->value();
-                if (!path.startsWith("/")) {
-                    path = "/" + path;
-                }
-                request->send(LittleFS, path, String(), true);
-            } else {
-                request->send(200, "application/json", "false");
+        // The backup button downloads every LittleFS file through here, including
+        // the raw binary presets (slots.bin, preset_*.X). The old path used
+        // request->send(LittleFS, ...) - an AsyncFileResponse with its own
+        // ~3k allocation - behind a 10k heap gate: when the heap was low (which
+        // the old per-click preference saves caused reliably), the handler
+        // answered the literal string "false" instead of the file, and the
+        // backup contained 5-byte placeholder files. Serving in 256-byte stack
+        // chunks avoids the big allocation, so this no longer depends on the
+        // free heap and the backup works even while the heap is low.
+        // On ESP32 query parameter ordering and unnamed params (e.g. cache-busters
+        // like "&176...") can make getParam(0) unreliable. Resolve by *name*.
+        if (request->hasParam("file")) {
+            String path = request->getParam("file")->value();
+            if (!path.startsWith("/")) {
+                path = "/" + path;
             }
+            File f = LittleFS.open(path, "r");
+            if (!f) {
+                request->send(200, "application/json", "false");
+                return;
+            }
+            // cap at 4 kB: config files are ~30 bytes, binary presets ~2.6 kB;
+            // anything larger would not be a backup file anyway
+            const size_t sendLen = f.size() > 4096 ? 4096 : f.size();
+            AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream",
+                [f, sendLen](uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
+                (void)index; // sequential reads from the current position
+                const size_t sent = f.position();
+                if (sent >= sendLen) {
+                    return 0; // end of stream
+                }
+                size_t toRead = sendLen - sent;
+                if (toRead > maxLen) toRead = maxLen;
+                const size_t read = f.read(buffer, toRead);
+                return read; // 0 on failure also ends the stream
+            });
+            response->addHeader("Cache-Control", "no-store");
+            request->send(response);
         } else {
             request->send(200, "application/json", "false");
         }
     });
 
     server.on("/filesystem/dir", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (ESP.getFreeHeap() > 10000) {
+        // Backup needs this list first, so it must not refuse on a low heap
+        // either. The JSON is small (a dozen file names); a fixed buffer plus
+        // String reserve keeps the reallocation count low.
+        char names[512];
+        size_t pos = 0;
+        names[pos++] = '[';
 #ifdef ESP8266
-            Dir dir = LittleFS.openDir("/");
-            String output = "[";
-
-            while (dir.next()) {
-                String name = dir.fileName();
-                if (!name.startsWith("/")) {
-                    name = "/" + name;
-                }
-                output += "\"";
-                output += name;
-                output += "\",";
-                delay(1); // wifi stack
+        Dir dir = LittleFS.openDir("/");
+        while (dir.next()) {
+            String name = dir.fileName();
+            if (!name.startsWith("/")) {
+                name = "/" + name;
             }
-#else
-            File root = LittleFS.open("/");
-            String output = "[";
-            File file = root.openNextFile();
-            while(file){
-                String name = file.name();
-                if (!name.startsWith("/")) {
-                    name = "/" + name;
-                }
-                output += "\"";
-                output += name;
-                output += "\",";
-                file = root.openNextFile();
-                delay(1);
+            if (pos < sizeof(names) - 3) {
+                names[pos++] = '"';
             }
-#endif
-
-            output += "]";
-
-            output.replace(",]", "]");
-
-            request->send(200, "application/json", output);
-            return;
+            for (size_t i = 0; i < name.length() && pos < sizeof(names) - 3; i++) {
+                names[pos++] = name.charAt(i);
+            }
+            if (pos < sizeof(names) - 3) {
+                names[pos++] = '"';
+                names[pos++] = ',';
+            }
+            delay(1); // wifi stack
         }
-        request->send(200, "application/json", "false");
+#else
+        File root = LittleFS.open("/");
+        File file = root.openNextFile();
+        while (file) {
+            String name = file.name();
+            if (!name.startsWith("/")) {
+                name = "/" + name;
+            }
+            if (pos < sizeof(names) - 3) {
+                names[pos++] = '"';
+            }
+            for (size_t i = 0; i < name.length() && pos < sizeof(names) - 3; i++) {
+                names[pos++] = name.charAt(i);
+            }
+            if (pos < sizeof(names) - 3) {
+                names[pos++] = '"';
+                names[pos++] = ',';
+            }
+            file = root.openNextFile();
+            delay(1);
+        }
+#endif
+        // trailing separator of the last entry (or an empty list)
+        if (pos > 1 && names[pos - 1] == ',') {
+            pos--;
+        }
+        names[pos++] = ']';
+        names[pos] = '\0';
+        request->send(200, "application/json", names);
     });
 
     server.on("/wifi/status", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -698,6 +755,38 @@ void startWebserver()
         request->send(200, "application/json", result ? "true" : "false");
     });
 
+    server.on("/gbs/set/sharpness", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // /gbs/set/sharpness?N with N = 0..32 (decimal); 32 = "Stark"/max
+        // (full LB/LH 0x3f register width, the old peaking level 3).
+        // Anything else is rejected.
+        bool queued = false;
+        if (request->params() > 0) {
+            const String v = request->getParam(0)->name();
+            char *end = nullptr;
+            const long parsed = strtol(v.c_str(), &end, 10);
+            if (v.length() > 0 && end != nullptr && *end == '\0' && parsed >= 0 && parsed <= 32) {
+                queued = userValueQueue.push('Y', (uint8_t)parsed);
+            }
+        }
+        request->send(queued ? 200 : 503, "application/json", queued ? "true" : "false");
+    });
+
+    // Set scanline strength as hex (/gbs/set/scanlinestrength?30): 0x00..0x60 switches the
+    // scanlines on with that strength (0x00 = strongest), 0x7f switches them off.
+    // Anything else is rejected.
+    server.on("/gbs/set/scanlinestrength", HTTP_GET, [](AsyncWebServerRequest *request) {
+        bool queued = false;
+        if (request->params() > 0) {
+            const String v = request->getParam(0)->name();
+            char *end = nullptr;
+            const long parsed = strtol(v.c_str(), &end, 16);
+            if (v.length() > 0 && end != nullptr && *end == '\0' && parsed >= 0x00 && (parsed <= 0x60 || parsed == 0x7f)) {
+                queued = userValueQueue.push('y', (uint8_t)parsed);
+            }
+        }
+        request->send(queued ? 200 : 503, "application/json", queued ? "true" : "false");
+    });
+
     //webSocket.onEvent(webSocketEvent);
 
     persWM.setConnectNonBlock(true);
@@ -812,4 +901,3 @@ void initUpdateOTA()
     ArduinoOTA.begin();
     yield();
 }
-

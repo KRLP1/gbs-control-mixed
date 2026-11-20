@@ -121,6 +121,7 @@
 // Project headers - src/video
 #include "src/video/Deinterlacing.h"
 #include "src/video/Scanlines.h"
+#include "src/video/Sharpness.h"
 #include "src/video/SyncWatcher.h"
 #include "src/video/VideoInput.h"
 #include "src/video/VideoShifting.h"
@@ -712,8 +713,8 @@ void setup()
                 uopt->enableCalibrationADC = 1;
 
             uopt->scanlineStrength = (uint8_t)(f.read() - '0'); // #18
-            if (uopt->scanlineStrength > 0x50) // 0x50 = scanlines off is the highest value
-                uopt->scanlineStrength = 0x30;
+            if (uopt->scanlineStrength > 0x60) // 0x60 = weakest allowed strength (0x00 = strongest)
+                uopt->scanlineStrength = 0x60;
 
             uopt->disableExternalClockGenerator = (uint8_t)(f.read() - '0'); // #19
             if (uopt->disableExternalClockGenerator > 1)
@@ -745,6 +746,21 @@ void setup()
             } else {
                 uopt->menuLanguage = 0; // default: German
             }
+
+            // #23: sharpness as a raw byte, 0..32 (32 = max). If the field is missing
+            // (preferencesv2.txt from before this option existed) or holds an invalid
+            // value, it is derived from the older wantPeaking / peakingLevel pair
+            // (peaking level button: off, 22, 31, max). wantPeaking and peakingLevel are
+            // then re-derived from it, so the three never disagree.
+            uint8_t sharpness = 255;
+            if (f.available()) {
+                sharpness = (uint8_t)f.read();
+            }
+            if (sharpness > SHARPNESS_MAX_STEP) {
+                sharpness = sharpnessFromPeakingLevel(uopt->wantPeaking ? uopt->peakingLevel : 0);
+            }
+            uopt->picSharpness = sharpness;
+            syncPeakingFromSharpness();
 
             f.close();
             syncReverseRotaryEncoderIsrMirror();
@@ -1323,28 +1339,7 @@ void loop()
                 ResetSDRAM();
                 break;
             case 'f':
-                SerialM.print(F("peaking "));
-                if (uopt->wantPeaking == 0) {
-                    uopt->wantPeaking = 1;
-                    if (uopt->peakingLevel == 0) {
-                        uopt->peakingLevel = 1;
-                    }
-                    static const uint8_t pkLbGain[4] = {0, 0x16, 0x28, 0x3f};
-                    static const uint8_t pkLhGain[4] = {0, 0x18, 0x28, 0x3f};
-                    static const uint8_t stepGain[4] = {1, 1, 4, 8};
-                    GBS::VDS_PK_Y_H_BYPS::write(0);
-                    GBS::VDS_PK_LB_GAIN::write(pkLbGain[uopt->peakingLevel & 3]);
-                    GBS::VDS_PK_LH_GAIN::write(pkLhGain[uopt->peakingLevel & 3]);
-                    if (rto->presetID != 0x05 && rto->presetID != 0x15) {
-                        GBS::VDS_STEP_GAIN::write(stepGain[uopt->peakingLevel & 3]);
-                    }
-                    SerialM.println("on");
-                } else {
-                    uopt->wantPeaking = 0;
-                    GBS::VDS_PK_Y_H_BYPS::write(1);
-                    SerialM.println("off");
-                }
-                saveUserPrefs();
+                togglePeaking(); // off remembers the sharpness, on restores it; saves prefs
                 break;
             case 'F':
                 SerialM.print(F("ADC filter "));
@@ -1948,10 +1943,26 @@ void loop()
         char queuedCmd;
         if (userCommandQueue.pop(queuedCmd)) {
             userCommand = queuedCmd;
+        } else {
+            // value commands ('Y' sharpness 0..31, 'y' scanline strength): take the
+            // value from userValueQueue and hand it to the command via pending*Value
+            ValueCommandQueue::Entry valueCmd;
+            if (userValueQueue.pop(valueCmd)) {
+                userCommand = valueCmd.cmd;
+                if (valueCmd.cmd == 'Y') {
+                    pendingSharpnessValue = valueCmd.value;
+                } else if (valueCmd.cmd == 'y') {
+                    pendingScanlineStrength = valueCmd.value; // 0x00..0x60 = on with strength, 0x7f = off (handled in case y)
+                }
+            }
         }
     }
 
     SerialM.processDeferred(); // Web-Handler-Ausgaben hier versenden
+
+    // deferred preferences save (value steppers): writes at most one
+    // preferencesv2.txt per 5 seconds, see PreferencesManager.cpp
+    pumpDeferredUserPrefsSave();
 
     if (userCommand != '@') {
         handleType2Command(userCommand);
@@ -2284,4 +2295,3 @@ void loop()
 //  }
 //}
 #endif // defined(ESP8266) || defined(ESP32)
-

@@ -38,8 +38,13 @@ void loadDefaultUserOptions()
     uopt->reverseRotaryEncoderForOledMenu =
         REVERSE_ROTARY_ENCODER_FOR_OLED_MENU > 0 ? 1 : 0; // #20 default from build-time macro
     uopt->menuLanguage = 0;                               // #22 default: German
+    uopt->picSharpness = 22;                             // #23 default: Normal (matches wantPeaking = 1, peakingLevel = 1)
     syncReverseRotaryEncoderIsrMirror();
 }
+
+// Deferred preferences save, see requestDeferredUserPrefsSave() below.
+// time (millis) when the pending save is due; 0 = idle, nothing pending
+static unsigned long deferredUserPrefsSaveAt = 0;
 
 void saveUserPrefs()
 {
@@ -48,6 +53,9 @@ void saveUserPrefs()
         SerialM.println(F("saveUserPrefs: open file failed"));
         return;
     }
+    // this write carries the current values of everything, so a deferred save that is
+    // still pending would only repeat it (one flash write less)
+    deferredUserPrefsSaveAt = 0;
     f.write(uopt->presetPreference + '0'); // #1
     f.write(uopt->enableFrameTimeLock + '0');
     f.write(uopt->presetSlot);
@@ -70,8 +78,49 @@ void saveUserPrefs()
     f.write(uopt->reverseRotaryEncoderForOledMenu + '0'); // #20
     f.write(uopt->peakingLevel + '0'); // #21
     f.write(uopt->menuLanguage + '0'); // #22 (0=German, 1=English)
+    f.write(uopt->picSharpness); // #23: raw byte 0..32 (32 = max)
 
     f.close();
     syncReverseRotaryEncoderIsrMirror();
 }
 
+// --- deferred preferences save -------------------------------------------------
+// One timestamp instead of a flag + timer: 0 = idle. Written from loop() context
+// only (the value steppers all run there), so no fencing is needed.
+
+// Delay between the last stepper change and the write
+static const unsigned long PREFERENCES_DEFERRED_SAVE_MS = 5000;
+
+void requestDeferredUserPrefsSave()
+{
+    // (re)arm the write 5 seconds into the future; further calls while a save is
+    // pending only push it back, so a burst of stepper clicks ends in exactly
+    // one LittleFS write with the final values (saveUserPrefs() always writes
+    // the current uopt, never a snapshot, so a later write is never stale)
+    deferredUserPrefsSaveAt = millis() + PREFERENCES_DEFERRED_SAVE_MS;
+    if (deferredUserPrefsSaveAt == 0) {
+        deferredUserPrefsSaveAt = 1; // 0 means idle
+    }
+}
+
+void pumpDeferredUserPrefsSave()
+{
+    if (deferredUserPrefsSaveAt == 0) {
+        return; // nothing pending
+    }
+    // millis() wraps every ~49 days; the (now - due) form stays correct across it
+    if ((long)(millis() - deferredUserPrefsSaveAt) < 0) {
+        return; // not due yet
+    }
+    deferredUserPrefsSaveAt = 0;
+    saveUserPrefs();
+}
+
+void flushDeferredUserPrefsSave()
+{
+    if (deferredUserPrefsSaveAt == 0) {
+        return; // nothing pending
+    }
+    deferredUserPrefsSaveAt = 0;
+    saveUserPrefs();
+}

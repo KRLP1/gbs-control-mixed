@@ -29,7 +29,7 @@ struct userOptions
     uint8_t wantOutputComponent;
     uint8_t deintMode;
     uint8_t wantVdsLineFilter;
-    uint8_t wantPeaking;
+    uint8_t wantPeaking; // derived from picSharpness (!= 0), see video/Sharpness.h
     uint8_t wantTap6;
     uint8_t preferScalingRgbhv;
     uint8_t PalForce60;
@@ -40,8 +40,9 @@ struct userOptions
     uint8_t enableCalibrationADC;
     uint8_t scanlineStrength;
     uint8_t reverseRotaryEncoderForOledMenu; // 0/1; default from REVERSE_ROTARY_ENCODER_FOR_OLED_MENU
-    uint8_t peakingLevel; // 0=off, 1=normal, 2=strong, 3=max (user command '8')
+    uint8_t peakingLevel; // derived from picSharpness: 0=off, 1=normal (<=22), 2=strong (<=31), 3=max (32); user command '8' steps through it
     uint8_t menuLanguage; // 0=German (default, also when key missing), 1=English; OLED + WebUI, applied after restart (#22)
+    uint8_t picSharpness; // #23: the peaking state: 0=off, 1..31 slider scale, 32=max (peaking level 3); single source of truth, see video/Sharpness.h
 };
 
 

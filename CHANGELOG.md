@@ -1,5 +1,188 @@
 # Changelog
 
+## [v1.7.5] – Sharpness & scanline steppers, heap stability root-cause fixes
+
+### Added
+
+- **Sharpness slider (0..32) replacing the peaking level button**: the
+  old "Peaking-Stufe" button cycled through four levels
+  (off/normal/strong/max). It is replaced by a real slider with `+`/`-`
+  buttons in single steps plus three presets (Weich = 0, Normal = 22,
+  Stark = 32). `uopt->picSharpness` (0..32) is the single source of
+  truth; `wantPeaking` and `peakingLevel` are derived from it via
+  `syncPeakingFromSharpness()` so the three never disagree. New
+  `src/video/Sharpness.h` provides `setPictureSharpness`,
+  `applyPictureSharpness`, `cyclePeakingLevel`, `togglePeaking`,
+  `adoptWantPeaking`, `syncPeakingFromSharpness`,
+  `sharpnessFromPeakingLevel`, and `SHARPNESS_MAX_STEP = 32`.
+
+- **Scanline strength slider (0x00..0x60) replacing the "Intensität"
+  button**: the old button stepped the strength in 0x10 increments up
+  to 0x50 (which doubled as "off"). The new slider uses fine 0x04
+  steps (quasi-stepless) with three presets (Leicht = 0x50, Mittel =
+  0x30, Stark = 0x10). On/off is now independent of the value: `−` at
+  0x60 switches the scanlines off (empty bar), `+` from "Off" switches
+  them on at 0x60. 0x00 is an ordinary strength (the strongest), never
+  "Off". New constants `SCANLINES_MAX_STRENGTH_VALUE = 0x60` and
+  `SCANLINES_OFF_VALUE = 0x7f` (the wire marker for "off" on the value
+  command). New shared function `applyScanlineState(bool on, uint8_t
+  strength, bool persist)` is used by the WebUI value command, the OSD
+  encoder, the preset restore, the slot restore and the serial toggle
+  '7' so registers, on/off state and range clamping are identical
+  everywhere.
+
+- **Preset files carry their scanline settings**: `savePresetToLittleFS()`
+  writes a trailer `S,<on>,<strength>` behind the register dump;
+  `loadPresetFromLittleFS()` parses it via `parsePresetScanlineTrailer()`
+  (new `src/storage/PresetTrailer.h`) and applies it when the load is a
+  user action (not an automatic reload). Presets saved by older
+  firmware have no trailer and fall back to the slot metadata.
+
+- **Value command queue**: new `src/commands/ValueCommandQueue.h`
+  provides an SPSC queue (with fences) for value commands, separate
+  from the character command queue. Two new user commands: `'Y'` sets
+  sharpness 0..32 (decimal), `'y'` sets scanline strength 0x00..0x60 or
+  0x7f = off (hex). The values are handed to `handleType2Command` via
+  `pendingSharpnessValue` / `pendingScanlineStrength`.
+
+- **HTTP endpoints for the steppers**: `/gbs/set/sharpness?N`
+  (decimal 0..32) and `/gbs/set/scanlinestrength?XX` (hex 00..60 or 7f).
+  Both parse strictly with `strtol` + range check, queue into
+  `userValueQueue`, answer 200/503.
+
+- **WebSocket value commands**: `"Y=<0..32>"` (decimal) / `"y=<hex>"`
+  over the open socket, parsed with the same base and range validation
+  as the HTTP endpoints. Small frame, no free-heap gate — works when
+  the HTTP guards would stand down.
+
+- **WebSocket status ping extended from 7 to 9 bytes**: byte 7 =
+  sharpness 0..32 (`'@' + value`), byte 8 = scanline strength low 6
+  bits (`'@' + (strength & 0x3F)`), byte 6 bit 2 = strength bit 0x40
+  (the strength 0x00..0x60 does not fit losslessly into one ASCII
+  byte). The stored strength is sent whether scanlines are on or off,
+  so the WebUI shows what a `+`/`−` press starts from. Older firmware
+  sends fewer bytes; the WebUI steppers then keep their default.
+
+- **Deferred preferences save**: `requestDeferredUserPrefsSave()` arms
+  a 5-second timer; `pumpDeferredUserPrefsSave()` in `loop()` writes
+  once after the last change; `flushDeferredUserPrefsSave()` writes
+  immediately (used before a restart). `saveUserPrefs()` clears any
+  pending deferred save. The `+`/`−` steppers can fire several times
+  per second and every `saveUserPrefs()` was a LittleFS write — the
+  deferred write turns a burst of clicks into exactly one write with
+  the final values.
+
+- **`data-i18n-attr` attribute translation**: `data-i18n-attr="title:key"`
+  sets the named attribute to the translated key, used for the `+`/`−`
+  button tooltips (`step_weaker` / `step_stronger`).
+
+### Fixed
+
+- **OLED preset selection skipped the scanline restore**:
+  `presetSelectionMenuHandler` called `applyPresets()` directly instead
+  of going through the "load custom preset" command. A preset that
+  differed from the current one only in its scanlines looked like
+  "nothing happened". The handler now calls `handleType2Command('3')`,
+  which runs `applyPresets()` plus the scanline restore plus the
+  preferences save — exactly what the WebUI does.
+
+- **OLED menu item leak**: `OLEDMenuItem::clearSubItems()` freed only
+  the direct children, marking them unused but leaving their own
+  subtrees marked as used forever. The language entry of the System
+  menu (which has children of its own) lost two items every time the
+  menu was opened, until `allocItem()` ran out of the 64 items and the
+  OLED menu was disabled. `clearSubItems()` now frees the whole subtree
+  recursively.
+
+- **OLED slot list held the whole 2.3 KB slot array in RAM**:
+  `presetsCreationMenuHandler` read the entire `slots.bin` into a
+  static `SlotMetaArray`. It now reads the file record by record into
+  a small static table (16 × 25 bytes for the names plus 16 tags);
+  slots beyond the first 16 valid ones are only counted.
+
+- **Low-heap endpoint behavior (root cause of the v1.7.4 503
+  workarounds)**: the slot scratch buffer was `new`/`delete` per
+  request, churning 2.3 KB of heap every slot operation. After a few
+  `/slot/save` round trips the small-block heap fragmented enough to
+  starve the websocket log and push the free heap below the 10k guards
+  of the other handlers. A static buffer in BSS (`slotsScratch`) fixes
+  the fragmentation; the handlers are dispatched one at a time from
+  the network stack, so no locking is needed.
+
+- **Heap gates that blocked recovery**: `/sc` and `/uc` had a 10k heap
+  gate, but the recovery commands the user reaches for when the heap
+  is low all run through these endpoints. Queueing one character costs
+  only stack, so the gates are removed entirely. `/bin/slots.bin` had
+  the same gate and hid the slot names behind a "false" answer right
+  when the WebUI reloaded them after a save — removed (static buffer,
+  no heap allocation). `/slot/set` and `/slot/save` keep a floor of
+  `HEAP_FLOOR_FS_WRITE = 4000` so an OOM inside the LittleFS write
+  cannot reset the device.
+
+- **`/filesystem/download` returned 5-byte placeholder files on low
+  heap**: the backup button downloads every LittleFS file through
+  here. The old path used `request->send(LittleFS, ...)` (an
+  `AsyncFileResponse` with its own ~3 KB allocation) behind a 10k heap
+  gate — when the heap was low, the handler answered the literal
+  string "false" instead of the file, and the backup contained 5-byte
+  placeholders. Rewritten to serve in 256-byte stack chunks via
+  `beginChunkedResponse`; no large allocation, no heap gate.
+
+- **`/filesystem/dir` fragmented the heap on low heap**: the JSON was
+  built by `String` concatenation behind a 10k gate. Rewritten with a
+  fixed 512-byte buffer; works on low heap, no `String` reallocations.
+
+- **`saveUserPrefs()` called mid-way through slot field copy** (from
+  v1.7.4): the slot restore path now goes through `readCurrentSlotMeta()`
+  (one 32-byte record by seek instead of the whole array), restores
+  scanlines through the shared `applyScanlineState()`, folds
+  `wantPeaking` into `picSharpness` via `adoptWantPeaking()`, and saves
+  after all fields are set.
+
+### Changed
+
+- **`preferencesv2.txt` field #23: `picSharpness`** (raw byte 0..32,
+  not `'0' + value`, because 32 > 9). The boot path derives it from
+  the older `wantPeaking` / `peakingLevel` pair when #23 is missing or
+  invalid. `peakingLevel` and `wantPeaking` are kept in the struct for
+  backward compatibility but are now derived from `picSharpness`.
+
+- **Scanline strength range widened from 0x50 to 0x60**: the boot
+  clamp changed from `> 0x50 → 0x30` to `> 0x60 → 0x60`. Old
+  preferences with strength 0x50 (the former "off" value) migrate to
+  0x60 (the weakest visible strength); since `wantScanlines` was 0 in
+  that case, the scanlines stay off.
+
+- **Slot scratch buffer moved from heap to BSS**: `SlotsScratch` now
+  points to the static `slotsScratch` instead of `new`/`delete`-ing
+  a `SlotMetaArray` per request.
+
+- **`gbsicon_bits[]` declared `static const ... PROGMEM`** (was
+  `static unsigned char[]`) — moves the icon to flash, frees RAM.
+
+- **Removed UI elements**: the "Intensität" button (serial command
+  `'K'`, scanline strength step) and the "Peaking-Stufe" button
+  (serial command `'8'`) are gone, replaced by the steppers. The
+  letter `'K'` stays reserved so a future user command cannot collide
+  with the serial `'K'` (HD bypass switch). The i18n keys
+  `btn_intensity`, `btn_peaking_level`, `peak_off`, `peak_normal`,
+  `peak_strong`, `peak_max` are removed.
+
+- **OSD scanline menu rewritten** to match the WebUI stepper model:
+  fine 0x04 steps, `+` = stronger (value down), `−` = weaker (value
+  up), `−` at 0x60 switches off, `+` from off switches on at 0x60.
+  All changes go through `applyScanlineState(..., persist = false)` so
+  one LittleFS write covers a burst of encoder steps.
+
+- **`applyBestHTotal` and `doPostPresetLoadSteps` re-apply sharpness
+  from `picSharpness`** (via `applyPictureSharpness()`) instead of
+  from `wantPeaking`/`peakingLevel` directly.
+
+- **`webui_html.h` regenerated** from the updated `webui.html`
+  (stepper markup, new i18n keys, removed peaking-level button).
+
+- `FIRMWARE_VERSION` bumped to `v1.7.5`.
+
 ## [v1.7.4] – WebUI & server hardening
 
 ### Fixed

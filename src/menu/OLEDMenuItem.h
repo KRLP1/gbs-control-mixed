@@ -46,6 +46,11 @@ private:
     void clearSubItems()
     {
         for (int i = 0; i < this->numSubItem; ++i) {
+            // free the whole subtree: an item that has children of its own (the
+            // language entry of the System menu) would otherwise leave them marked
+            // as used forever - two lost items every time the menu is opened, until
+            // allocItem() runs out of the 64 items and the OLED menu is disabled
+            subItems[i]->clearSubItems();
             subItems[i]->used = false;
             subItems[i] = nullptr;
         }
