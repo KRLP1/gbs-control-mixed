@@ -13,7 +13,7 @@ struct CommandQueue {
             return false;
         }
         buf[h] = c;
-        // Byte-Store sichtbar machen, BEVOR head veröffentlicht wird
+        // make the byte store visible BEFORE head is published
         std::atomic_thread_fence(std::memory_order_release);
         head = next;
         return true;
@@ -25,7 +25,7 @@ struct CommandQueue {
         if (t == head) {
             return false;
         }
-        // head-Load abgeschlossen, BEVOR der Buffer gelesen wird
+        // head load completed BEFORE the buffer is read
         std::atomic_thread_fence(std::memory_order_acquire);
         c = buf[t];
         tail = (uint8_t)((t + 1) % CAPACITY);

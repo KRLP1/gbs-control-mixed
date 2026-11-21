@@ -96,7 +96,7 @@ struct runTimeOptions
     bool isValidForScalingRGBHV;
     bool useHdmiSyncFix;
     bool extClockGenDetected;
-    bool autoGainHookEnabled;  // true = Hook hat Auto-Gain aktiviert (nicht User), kann beim Preset-Wechsel auto-deaktiviert werden
+    bool autoGainHookEnabled;  // true = the hook enabled auto gain (not the user), may be auto-disabled on preset change
 };
 // remember adc options across presets
 struct adcOptions

@@ -1,4 +1,5 @@
 #include "WebServer.h"
+#include <memory>
 #include "../core/Globals.h"
 #include "../web/SerialMirror.h"
 #include "../web/WebSocketHandler.h" // webSocketEventHandler
@@ -240,7 +241,7 @@ void startWebserver()
         WiFi.persistent(false);
 #endif
 
-        // Über die Queue statt direkt: sonst Lost-Update gegen loop():1683
+        // Through the queue instead of directly: otherwise a lost update against loop()
         if (!userCommandQueue.push('u')) {
             SerialM.deferLog(F("Warning: user command queue full, dropping\n"));
         }
@@ -320,9 +321,9 @@ void startWebserver()
         // same floor as /slot/set: far below the old 10k gate, only so that an
         // out-of-memory inside the LittleFS write cannot reset the device
         if (params >= 2 && ESP.getFreeHeap() > HEAP_FLOOR_FS_WRITE) {
-            // index param - benannt statt positional: Reihenfolge- und
-            // Parameter-Unabhängigkeit (z.B. Cache-Buster am Ende).
-            // WICHTIG: Validierung VOR jedem LittleFS-Zugriff weiter unten.
+            // index param - named instead of positional: independent of the order and
+            // number of parameters (e.g. a cache buster at the end).
+            // IMPORTANT: validate BEFORE any LittleFS access further below.
             const AsyncWebParameter *slotIndexParam = request->getParam("index");
             if (slotIndexParam == nullptr) {
                 goto fail;
@@ -340,7 +341,7 @@ void startWebserver()
             }
             String slotName = slotNameParam->value();
             if (!slotName.length()) {
-                goto fail; // leerer Name: Slot nicht unbenannt überschreiben
+                goto fail; // empty name: do not overwrite the slot with an unnamed one
             }
 
             SlotsScratch scratch;
@@ -573,60 +574,105 @@ void startWebserver()
     });
 
     server.on("/filesystem/dir", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Backup needs this list first, so it must not refuse on a low heap
-        // either. The JSON is small (a dozen file names); a fixed buffer plus
-        // String reserve keeps the reallocation count low.
-        char names[512];
-        size_t pos = 0;
-        names[pos++] = '[';
+        // Backup needs this list first, so it must not refuse on a low heap either.
+        // The JSON array is streamed name by name in chunks: constant memory however
+        // many files exist (every saved preset adds one file per video mode). The old
+        // fixed 512 byte buffer silently cut the list after ~25 names, so a backup
+        // taken with many presets was missing files without any warning.
+        struct DirState {
 #ifdef ESP8266
-        Dir dir = LittleFS.openDir("/");
-        while (dir.next()) {
-            String name = dir.fileName();
-            if (!name.startsWith("/")) {
-                name = "/" + name;
-            }
-            if (pos < sizeof(names) - 3) {
-                names[pos++] = '"';
-            }
-            for (size_t i = 0; i < name.length() && pos < sizeof(names) - 3; i++) {
-                names[pos++] = name.charAt(i);
-            }
-            if (pos < sizeof(names) - 3) {
-                names[pos++] = '"';
-                names[pos++] = ',';
-            }
-            delay(1); // wifi stack
-        }
+            Dir dir;
 #else
-        File root = LittleFS.open("/");
-        File file = root.openNextFile();
-        while (file) {
-            String name = file.name();
-            if (!name.startsWith("/")) {
-                name = "/" + name;
-            }
-            if (pos < sizeof(names) - 3) {
-                names[pos++] = '"';
-            }
-            for (size_t i = 0; i < name.length() && pos < sizeof(names) - 3; i++) {
-                names[pos++] = name.charAt(i);
-            }
-            if (pos < sizeof(names) - 3) {
-                names[pos++] = '"';
-                names[pos++] = ',';
-            }
-            file = root.openNextFile();
-            delay(1);
-        }
+            File root;
+            File file;
 #endif
-        // trailing separator of the last entry (or an empty list)
-        if (pos > 1 && names[pos - 1] == ',') {
-            pos--;
-        }
-        names[pos++] = ']';
-        names[pos] = '\0';
-        request->send(200, "application/json", names);
+            char pending[80];     // formatted entry, may span several chunks
+            size_t pendingLen = 0;
+            size_t pendingOff = 0;
+            bool started = false;  // '[' written
+            bool finished = false; // ']' written
+            bool first = true;     // no entry written yet (no leading comma)
+        };
+        // shared_ptr: the response owns the state, so it is released (and the directory
+        // closed) even when the client disconnects before the last chunk was requested
+        auto st = std::make_shared<DirState>();
+#ifdef ESP8266
+        st->dir = LittleFS.openDir("/");
+#else
+        st->root = LittleFS.open("/");
+        st->file = st->root.openNextFile();
+#endif
+        AsyncWebServerResponse *response = request->beginChunkedResponse("application/json",
+            [st](uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
+            (void)index; // sequential, state is kept in st
+            size_t pos = 0;
+            if (!st->started) {
+                if (maxLen == 0) {
+                    return 0;
+                }
+                buffer[pos++] = '[';
+                st->started = true;
+            }
+            while (pos < maxLen) {
+                if (st->pendingOff >= st->pendingLen) {
+                    // current entry fully delivered: fetch the next one
+                    st->pendingOff = 0;
+                    st->pendingLen = 0;
+                    if (st->finished) {
+                        break;
+                    }
+                    String name;
+                    bool have = false;
+#ifdef ESP8266
+                    if (st->dir.next()) {
+                        name = st->dir.fileName();
+                        have = true;
+                    }
+#else
+                    if (st->file) {
+                        name = st->file.name();
+                        have = true;
+                        st->file = st->root.openNextFile();
+                    }
+#endif
+                    if (!have) {
+                        buffer[pos++] = ']';
+                        st->finished = true;
+                        continue;
+                    }
+                    if (!name.startsWith("/")) {
+                        name = "/" + name;
+                    }
+                    char *e = st->pending;
+                    const size_t cap = sizeof(st->pending);
+                    size_t n = 0;
+                    if (!st->first) {
+                        e[n++] = ',';
+                    }
+                    e[n++] = '"';
+                    for (size_t i = 0; i < name.length() && n + 3 < cap; i++) {
+                        const char c = name.charAt(i);
+                        if (c == '"' || c == '\\') {
+                            e[n++] = '\\'; // keep the JSON valid for odd file names
+                        }
+                        e[n++] = c;
+                    }
+                    e[n++] = '"';
+                    st->pendingLen = n;
+                    st->first = false;
+                }
+                size_t chunk = st->pendingLen - st->pendingOff;
+                if (chunk > maxLen - pos) {
+                    chunk = maxLen - pos;
+                }
+                memcpy(buffer + pos, st->pending + st->pendingOff, chunk);
+                pos += chunk;
+                st->pendingOff += chunk;
+            }
+            return pos; // 0 only after the closing ']' was delivered: end of stream
+        });
+        response->addHeader("Cache-Control", "no-store");
+        request->send(response);
     });
 
     server.on("/wifi/status", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -655,7 +701,7 @@ void startWebserver()
                     device_hostname = hn;
                 }
                 request->send(200, "application/json", "{\"hostname\":\"" + hn + "\"}");
-                // Über die Queue statt direkt (gleicher Grund wie /wifi/connect)
+                // Through the queue instead of directly (same reason as /wifi/connect)
                 if (!userCommandQueue.push('a')) {
                     SerialM.deferLog(F("Warning: user command queue full, dropping\n"));
                 }
@@ -728,8 +774,8 @@ void startWebserver()
     });
 
     server.on("/gbs/restore-filters", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Nur einordnen: I2C (disableScanlines) und LittleFS (slots.bin lesen,
-        // saveUserPrefs) gehören in den loop()-Kontext, nicht in den Async-Task.
+        // Only queue the command: I2C (disableScanlines) and LittleFS (reading slots.bin,
+        // saveUserPrefs) belong in the loop() context, not in the async task.
         if (userCommandQueue.push('V')) {
             request->send(200, "application/json", "true");
         } else {
@@ -823,11 +869,11 @@ void startWebserver()
     }
 #endif
 
-    webSocket.onEvent(webSocketEventHandler); // Pong-Tracking fuer Fix 10
+    webSocket.onEvent(webSocketEventHandler); // pong tracking
     server.begin();                          // Webserver for the site
     webSocket.begin();                       // Websocket for interaction
-    // Heartbeat: enableHeartbeat() ist im ESP8266-ASYNC-Modus wegkompiliert
-    // (WebSocketsServer.cpp handleClientData). App-Level-Ersatz: Fix 10b/10d.
+    // Heartbeat: enableHeartbeat() is compiled out in ESP8266 ASYNC mode
+    // (WebSocketsServer.cpp handleClientData). App-level replacement.
     yield();
 
 #ifdef HAVE_PINGER_LIBRARY

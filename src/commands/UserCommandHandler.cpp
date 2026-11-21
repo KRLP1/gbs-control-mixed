@@ -749,8 +749,8 @@ void handleType2Command(char argument)
             }
             break;
         case 'V': {
-            // /gbs/restore-filters: Slot-Filter aus slots.bin wiederherstellen.
-            // Läuft hier im loop()-Kontext (I2C + LittleFS).
+            // /gbs/restore-filters: restore the slot filters from slots.bin.
+            // Runs here in the loop() context (I2C + LittleFS).
             // Only the current slot's 32 byte record is read (readCurrentSlotMeta), not the
             // whole array: no 2.3 KB static buffer in RAM.
             SlotMeta meta;

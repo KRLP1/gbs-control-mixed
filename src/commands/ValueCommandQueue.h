@@ -8,11 +8,12 @@
 // strength 0x00..0x60 switching the scanlines on, or 0x7f = switch them off).
 // Producers: the /gbs/set/* HTTP handlers and the websocket "Y=" / "y=" frames;
 // consumer: loop() - same release/acquire fencing as CommandQueue.
-// The queue is single-producer by design. Both producers run cooperatively in one
-// thread on the ESP8266 (a push contains no yield). On the ESP32 the HTTP handler
-// (AsyncTCP task) and the websocket handler (loop task) can in theory push at the
-// same moment; the worst case is one lost value command (never a corrupt entry or
-// index), and the WebUI only falls back to HTTP while its websocket is down.
+// Both producers run cooperatively in one thread on the ESP8266. On the ESP32 the
+// websocket handler runs in the loop() task and the HTTP handlers in the async_tcp
+// task, so two pushes at the very same moment can lose or mix an entry (a mixed
+// entry is cmd from one push and value from the other): there is no lock (known
+// limitation, untested without ESP32 hardware). The WebUI only falls back to HTTP
+// while its websocket is down.
 struct ValueCommandQueue {
     static const uint8_t CAPACITY = 16;
 

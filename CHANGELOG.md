@@ -1,5 +1,54 @@
 # Changelog
 
+## [v1.7.6] – filesystem/dir backup completeness, dead code removal, comment translation
+
+### Fixed
+
+- **`/filesystem/dir` silently truncated the file list**: the v1.7.5
+  implementation built the JSON array in a fixed 512-byte stack buffer
+  and cut the list after roughly 25 names without any warning. Every
+  saved preset adds one file per video mode, so a backup taken with
+  many presets was missing files. The endpoint now streams the JSON
+  array name by name in chunks via `beginChunkedResponse`, with the
+  directory state held in a `shared_ptr<DirState>` owned by the
+  response: constant memory regardless of the number of files, and
+  the directory is closed even when the client disconnects before the
+  last chunk was requested. File names are now JSON-escaped (`"` and
+  `\`), so odd file names cannot break the response.
+
+- **`getOutputFrameRate()` dead average branch**: the first
+  two-sample averaging branch (`0.5f * (f1 + f2)`) was unreachable
+  because the surrounding `else` block is only entered when `f1`/`f2`
+  are not both valid and close. The branch is removed; `f1 + f3` is
+  now the first real averaging option. The behavior is unchanged, the
+  code states what it actually does.
+
+- **OTA redirect resolver dead variable `String base`**: computed but
+  never used in `otaResolveRedirects` and `otaFetchChunk` (the origin
+  is derived from the slash index). Removed in both places.
+
+### Changed
+
+- **C++ source comments translated from German to English**:
+  `gbs-control.ino`, `CommandQueue.h`, `ValueCommandQueue.h`,
+  `options.h`, `GBSController.cpp`, `OLEDMenuImplementation.cpp`,
+  `OSDManager.h`, `framesync.h`, `SerialMirror.cpp/.h`,
+  `WebServer.cpp`, `WebSocketHandler.cpp/.h`, `WiFiManager.cpp`.
+   No logic changes.
+
+- **`ValueCommandQueue` documentation corrected**:
+  the previous comment described the queue as "single-producer by
+  design" with "the worst case is one lost value command". On the
+  ESP32 the HTTP handlers run in the `async_tcp` task and the
+  websocket handler in the `loop()` task, so two pushes at the very
+  same moment can in fact mix an entry (cmd from one push, value from
+  the other). The new comment states this as a known limitation that
+  is untested without ESP32 hardware. On the ESP8266 (the target
+  platform) both producers run cooperatively in one thread and the
+  limitation does not apply.
+
+- `FIRMWARE_VERSION` bumped to `v1.7.6`.
+
 ## [v1.7.5] – Sharpness & scanline steppers, heap stability root-cause fixes
 
 ### Added

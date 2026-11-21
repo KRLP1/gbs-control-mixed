@@ -29,7 +29,7 @@ extern void loadDefaultUserOptions();
 extern uint8_t getVideoMode();
 extern runTimeOptions *rto;
 extern userOptions *uopt;
-extern String slotIndexMap; // Slot-Index 0..71 -> Slot-Zeichen
+extern String slotIndexMap; // slot index 0..71 -> slot character
 extern const char *ap_ssid;
 extern const char *ap_password;
 extern const char *device_hostname_full;
@@ -141,9 +141,9 @@ bool presetSelectionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
     display->setTextAlignment(OLEDDISPLAY_TEXT_ALIGNMENT::TEXT_ALIGN_CENTER);
     display->drawString(OLED_MENU_WIDTH / 2, OLED_MENU_HEIGHT / 2, oledMsg(MSG_LOADED));
     display->display();
-    // item->tag = Slot-Index (0..71), nicht das Slot-Zeichen
+    // item->tag = slot index (0..71), not the slot character
     if (item->tag >= slotIndexMap.length()) {
-        manager->unfreeze(); // ungültiger Index: Slot nicht überschreiben
+        manager->unfreeze(); // invalid index: do not overwrite the slot
         return false;
     }
     uopt->presetSlot = slotIndexMap[item->tag];
@@ -167,9 +167,9 @@ bool presetSelectionMenuHandler(OLEDMenuManager *manager, OLEDMenuItem *item, OL
 static bool isValidSlotName(const char *name, size_t maxLen) {
     if (!name || !*name) return false;
     if (strcmp(EMPTY_SLOT_NAME, name) == 0) return false;
-    // Erstes Zeichen: jedes sichtbare ASCII-Zeichen (0x21-0x7E). Die WebUI erlaubt auch
-    // Namen wie "(Test)" oder "-Mario"; nur Leerzeichen/Steuerzeichen am Anfang gelten
-    // als ungueltig (leerer oder beschaedigter Slot).
+    // First character: any visible ASCII character (0x21-0x7E). The WebUI also allows
+    // names like "(Test)" or "-Mario"; only spaces/control characters at the start
+    // count as invalid (empty or damaged slot).
     unsigned char first = (unsigned char)name[0];
     if (first <= 0x20 || first > 0x7E) return false;
     for (size_t i = 0; i < maxLen; ++i) {

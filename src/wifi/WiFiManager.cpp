@@ -19,8 +19,8 @@ void handleWiFi(boolean instant)
         MDNS.update();
 #endif
 
-        webSocket.loop();      // No-op im ESP8266-ASYNC-Modus
-        webSocketHeartbeat();  // Ersatz-Heartbeat (Fix 10b)
+        webSocket.loop();      // no-op in ESP8266 ASYNC mode
+        webSocketHeartbeat();  // replacement heartbeat
 
         persWM.handleWiFi(); // if connected, returns instantly. otherwise it reconnects or opens AP
 

@@ -246,8 +246,9 @@ float getOutputFrameRate()
         else retVal = f3;
 
         // If we have two close samples among the three, average them for stability.
-        if (f1 >= 47.0f && f1 <= 86.0f && f2 >= 47.0f && f2 <= 86.0f && diff12 <= 0.5f && rel12 <= 0.00833f) retVal = 0.5f * (f1 + f2);
-        else if (f1 >= 47.0f && f1 <= 86.0f && f3 >= 47.0f && f3 <= 86.0f && d13 <= 0.5f) retVal = 0.5f * (f1 + f3);
+        // (f1/f2 cannot be the close pair here: this block is only entered when they
+        // are not both valid and close.)
+        if (f1 >= 47.0f && f1 <= 86.0f && f3 >= 47.0f && f3 <= 86.0f && d13 <= 0.5f) retVal = 0.5f * (f1 + f3);
         else if (f2 >= 47.0f && f2 <= 86.0f && f3 >= 47.0f && f3 <= 86.0f && d23 <= 0.5f) retVal = 0.5f * (f2 + f3);
     } else {
         // Two consistent samples: average them.
@@ -360,7 +361,7 @@ void applyPresets(uint8_t result)
         return;
     }
 
-    // === Auto-Gain nur für PAL 1024x768 zulassen, sonst aus – aber NUR wenn Hook es eingeschaltet hat ===
+    // === Allow auto gain only for PAL 1024x768, otherwise off - but ONLY if the hook turned it on ===
     bool isPal1024x768 = ((result == 2 || result == 4) &&
                           uopt->presetPreference == Output1024x768);
     if (!isPal1024x768 && uopt->enableAutoGain && rto->autoGainHookEnabled) {
@@ -370,7 +371,7 @@ void applyPresets(uint8_t result)
         rto->autoGainHookEnabled = false;
         SerialM.println(F("Auto-Gain disabled (was hook-enabled, switching away from PAL 1024x768)"));
     }
-    // === Ende Auto-Gain-Check ===
+    // === End of auto gain check ===
 
     // if RGBHV scaling and invoked through web ui or custom preset
     // need to know syncTypeCsync
@@ -451,8 +452,8 @@ void applyPresets(uint8_t result)
     }
 
     if (uopt->PalForce60 == 1) {
-        // Windowbox-Ausnahme: PAL-Variante ist ein sauberes 1080p50-Design
-        // und soll nicht nach NTSC konvertiert werden
+        // Windowbox exception: the PAL variant is a clean 1080p50 design
+        // and must not be converted to NTSC
         if (uopt->presetPreference != 2 && uopt->presetPreference != Output960PWindowbox && uopt->presetPreference != Output1024x768) {
             if (result == 2 || result == 4) {
                 Serial.println(F("PAL@50 to 60Hz"));
@@ -564,9 +565,9 @@ void applyPresets(uint8_t result)
             GBS::IF_HB_SP2::write(116);
             latchPLLAD();
 
-            // === PAL 1024x768: Auto-Gain default an ===
-            // Fixt ADC-Übersteuerung bei B/W-Flanken (gelb-auf-schwarz-Spikes im sd2snes-Menü)
-            // Greift nur beim ersten Preset-Load, danach ist Flag persistiert.
+            // === PAL 1024x768: auto gain on by default ===
+            // Fixes ADC overdrive on black/white edges (yellow-on-black spikes in the sd2snes menu).
+            // Only takes effect on the first preset load, the flag is persisted afterwards.
             if (!uopt->enableAutoGain) {
                 uopt->enableAutoGain = 1;
                 setAdcGain(AUTO_GAIN_INIT);

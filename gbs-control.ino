@@ -250,13 +250,13 @@ void applyWindowbox960(uint8_t videoMode)
             latchPLLAD();
             GBS::PLLAD_VCORST::write(1);   // PLL-Reset
             delay(20);
-            GBS::PLLAD_VCORST::write(0);   // Release -> Neu-Lock
-            delay(100);                    // Lock-Zeit geben
+            GBS::PLLAD_VCORST::write(0);   // release -> re-lock
+            delay(100);                    // give it time to lock
             updateClampPosition();
             updateCoastPosition(0);
         }
     } else {
-        // NTSC: unveraendert, getestet und funktionierend
+        // NTSC: unchanged, tested and working
         writeProgramArrayNew(ntsc_1080p_960w, false);
         doPostPresetLoadSteps();
         GBS::IF_VB_ST::write(510);
@@ -911,10 +911,10 @@ void setup()
         discardSerialRxData();
     }
 
-    // Webserver bewusst zuletzt starten: Handler laufen erst auf vollstaendig
-    // initialisiertem State (uopt aus preferencesv2.txt, rto-Defaults, GBS-I2C).
-    // webServerStarted-Gate (WiFiManager.cpp) laesst die handleWiFi()-Aufrufe
-    // in setup() davor leer laufen. WebUI/AP dadurch erst nach ~3-5s mehr da.
+    // Start the web server last on purpose: the handlers only run on fully
+    // initialized state (uopt from preferencesv2.txt, rto defaults, GBS I2C).
+    // The webServerStarted gate (WiFiManager.cpp) lets the handleWiFi() calls
+    // in setup() before that run empty. As a result the WebUI/AP is only there after ~3-5 s.
     if (rto->webServerEnabled) {
         startWebserver();
         rto->webServerStarted = true;
@@ -1691,9 +1691,9 @@ void loop()
                     if (rto->extClockGenDetected) {
                         Serial.print(F("old freqExtClockGen: "));
                         Serial.println((uint32_t)rto->freqExtClockGen);
-                        // Erst validieren, dann zuweisen: 0 (parseInt-Timeout)
-                        // wuerde spaeter in externalClockGenSyncInOutRate() zu
-                        // Si.setFreq(0,0) -> 900000000/0 -> CPU-Exception
+                        // Validate first, then assign: 0 (parseInt timeout)
+                        // would later lead to Si.setFreq(0,0) -> 900000000/0 -> CPU exception
+                        // in externalClockGenSyncInOutRate()
                         uint32_t newFreq = (uint32_t)Serial.parseInt();
                         if (newFreq >= 1000000 && newFreq <= 250000000) {
                             rto->freqExtClockGen = newFreq;
@@ -1958,7 +1958,7 @@ void loop()
         }
     }
 
-    SerialM.processDeferred(); // Web-Handler-Ausgaben hier versenden
+    SerialM.processDeferred(); // send the web handler output here
 
     // deferred preferences save (value steppers): writes at most one
     // preferencesv2.txt per 5 seconds, see PreferencesManager.cpp
@@ -2004,13 +2004,13 @@ void loop()
                 success = FrameSync::runVsync(uopt->frameTimeLockMethod);
             }
             if (!success) {
-                // uint8_t-Dekrement: 0-- wrappt auf 255 -> naechster Reset erst
-                // nach ~255 Fehlversuchen (~7 min). Guard wie VideoTiming.cpp.
-                // Kein Re-Arm noetig: FrameSync::reset() setzt syncLockReady=false,
-                // und dieser Block laeuft nur bei ready() -> genau 1 Reset, danach
-                // Recovery ueber runAutoBestHTotal()/FrameSync::init(); dessen Erfolg
-                // setzt den Counter wieder auf 16 (VideoTiming.cpp applyBestHTotal).
-                // Max. 1 Reset pro lockInterval (~1.7 s), selbst im Worst Case.
+                // uint8_t decrement: 0-- wraps to 255 -> the next reset only comes
+                // after ~255 failed attempts (~7 min). Guard like in VideoTiming.cpp.
+                // No re-arm needed: FrameSync::reset() sets syncLockReady=false,
+                // and this block only runs when ready() -> exactly 1 reset, after that
+                // recovery via runAutoBestHTotal()/FrameSync::init(); its success
+                // sets the counter back to 16 (VideoTiming.cpp applyBestHTotal).
+                // At most 1 reset per lockInterval (~1.7 s), even in the worst case.
                 if (rto->syncLockFailIgnore > 0) {
                     rto->syncLockFailIgnore--;
                 }

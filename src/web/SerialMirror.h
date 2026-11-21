@@ -22,7 +22,7 @@ private:
     unsigned long lastFlushTime = 0;
     static constexpr unsigned long FLUSH_INTERVAL_MS = 50;
 
-    // SPSC-Ring: Async-Handler schreiben, loop() versendet
+    // SPSC ring: async handlers write, loop() sends
     static constexpr size_t DEFER_SIZE = 256;
     char deferBuf[DEFER_SIZE];
     volatile uint16_t deferHead = 0;
@@ -41,9 +41,9 @@ public:
     int peek() { return -1; }
     void flush();
 
-    void deferLog(const char *str);            // aus Async-Handlern
+    void deferLog(const char *str);            // from async handlers
     void deferLog(const __FlashStringHelper *str);
-    void processDeferred();                    // aus loop()
+    void processDeferred();                    // from loop()
 };
 
 extern SerialMirror SerialM;

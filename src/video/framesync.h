@@ -168,7 +168,7 @@ private:
 #endif
 
         if ((*start >= *stop) || *stop == 0 || *start == 0) {
-            // ESP.getCycleCount() overflow oder no pulse, just fail this round
+            // ESP.getCycleCount() overflow or no pulse, just fail this round
             return false;
         }
 
@@ -442,7 +442,7 @@ public:
 #endif
 
         if ((*start >= *stop) || *stop == 0 || *start == 0) {
-            // ESP.getCycleCount() overflow oder no pulse, just fail this round
+            // ESP.getCycleCount() overflow or no pulse, just fail this round
             return false;
         }
 

@@ -856,7 +856,6 @@ static bool otaResolveRedirects(String& url)
         if ((code == 301 || code == 302 || code == 303 || code == 307 || code == 308)
             && head.location.length() > 0) {
             if (head.location.startsWith("/")) {
-                String base = (url.startsWith("https://")) ? "https://" : "http://";
                 int slash = url.indexOf('/', 8);
                 String origin = (slash > 0) ? url.substring(0, slash) : url;
                 url = origin + head.location;
@@ -1155,7 +1154,6 @@ static OtaFetchResult otaFetchChunk(String& currentUrl, long offset, long len,
             && head.location.length() > 0) {
             // Follow the redirect; remember the final URL for later chunks.
             if (head.location.startsWith("/")) {
-                String base = (currentUrl.startsWith("https://")) ? "https://" : "http://";
                 int slash = currentUrl.indexOf('/', 8);
                 String origin = (slash > 0) ? currentUrl.substring(0, slash)
                                             : currentUrl;

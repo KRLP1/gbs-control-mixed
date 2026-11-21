@@ -81,7 +81,7 @@ private:
         MAIN,
         SUB,
     };
-    uint8_t cursor = 0; // Initializer statt auf BSS-Nullung zu vertrauen
+    uint8_t cursor = 0; // explicit initializer instead of relying on BSS zeroing
     uint8_t horiZoom = GBS::OSD_ZOOM_5X; // zoom register value in use, set by resetPosition()
     OSDHanlder handlers[8];
     OSDState state = OSDState::OFF;

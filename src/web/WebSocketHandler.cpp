@@ -143,8 +143,8 @@ void updateWebSocketData()
         }
     }
 }
-// Letzter Pong-Empfang pro Client-Slot (WEBSOCKETS_SERVER_CLIENT_MAX = 2).
-// Handler laeuft im Async-Kontext: nur 32-Bit-Store, auf Xtensa atomar.
+// Last pong received per client slot (WEBSOCKETS_SERVER_CLIENT_MAX = 2).
+// The handler runs in the async context: only a 32-bit store, atomic on Xtensa.
 static uint32_t wsLastPong[WEBSOCKETS_SERVER_CLIENT_MAX] = {0};
 
 void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
@@ -153,15 +153,15 @@ void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *payload, size_t 
         return;
     }
     if (type == WStype_CONNECTED) {
-        wsLastPong[num] = millis(); // Start der Toleranzzeit
+        wsLastPong[num] = millis(); // start of the grace period
     } else if (type == WStype_PONG) {
-        wsLastPong[num] = millis(); // Browser antworten protokollseitig (RFC 6455)
+        wsLastPong[num] = millis(); // browsers answer on the protocol level (RFC 6455)
     } else if (type == WStype_TEXT && length == 2 && (payload[0] == 's' || payload[0] == 'u')) {
-        // Kommandos ueber den offenen WebSocket ("s<cmd>" = serialCommand, "u<cmd>" =
-        // userCommand): spart pro Tastendruck einen TCP-Handshake + HTTP-Request
-        // (lwIP-Slots, Heap). Die WebUI faellt auf /sc?//uc? (HTTP) zurueck, solange
-        // der Socket zu ist. Gleiche Queues wie die HTTP-Handler; SPSC + Fences,
-        // Warnung via deferLog, weil dieser Callback im Async-Kontext laeuft.
+        // Commands over the open WebSocket ("s<cmd>" = serialCommand, "u<cmd>" =
+        // userCommand): saves a TCP handshake + HTTP request per key press
+        // (lwIP slots, heap). The WebUI falls back to /sc? and /uc? (HTTP) while
+        // the socket is closed. Same queues as the HTTP handlers; SPSC + fences,
+        // warning via deferLog because this callback runs in the async context.
         const bool queued = (payload[0] == 's') ? serialCommandQueue.push((char)payload[1])
                                                 : userCommandQueue.push((char)payload[1]);
         if (!queued) {
@@ -197,8 +197,8 @@ void webSocketEventHandler(uint8_t num, WStype_t type, uint8_t *payload, size_t 
     }
 }
 
-// Alle 2s pingen, nach >6s ohne Pong disconnectieren (toter Client).
-// Aufruf aus handleWiFi() = loop()-Kontext.
+// Ping every 2 s, disconnect after more than 6 s without a pong (dead client).
+// Called from handleWiFi() = loop() context.
 void webSocketHeartbeat()
 {
     static uint32_t lastTick = 0;
@@ -213,7 +213,7 @@ void webSocketHeartbeat()
             continue;
         }
         if (wsLastPong[i] != 0 && (now - wsLastPong[i]) > 6000) {
-            webSocket.disconnect(i); // Zombie: Slot freigeben
+            webSocket.disconnect(i); // zombie: free the slot
             continue;
         }
         webSocket.sendPing(i);
