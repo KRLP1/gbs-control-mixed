@@ -1241,13 +1241,24 @@ void runSyncWatcher()
                         if ((VPERIOD_IF % 2) == oddEvenWhenArmed) {
                             timingAdjustDelay--;
                             if (timingAdjustDelay == 0) {
-                                if (uopt->enableFrameTimeLock) {
-                                    FrameSync::reset(uopt->frameTimeLockMethod);
-                                    GBS::GBS_RUNTIME_FTL_ADJUSTED::write(1);
-                                    delay(10);
-                                    lastVsyncLock = millis();
+                                // While the frame lock on the external clock is running it already
+                                // follows a changed source rate (e.g. 240p <-> 480i) in small steps.
+                                // Resetting it here makes the coarse clock match run once more, which
+                                // steps the clock by up to +-25 kHz per switch and lets the output rate
+                                // drift further from the source rate with every switch (seen with a
+                                // Wii in Bob mode). So skip both while the lock is ready; anything
+                                // else keeps the old behaviour.
+                                // (ported from brisma gbsc-pro b8120e6, issue #78)
+                                const bool lockFollows = uopt->enableFrameTimeLock && rto->extClockGenDetected && FrameSync::frequencyReady();
+                                if (!lockFollows) {
+                                    if (uopt->enableFrameTimeLock) {
+                                        FrameSync::reset(uopt->frameTimeLockMethod);
+                                        GBS::GBS_RUNTIME_FTL_ADJUSTED::write(1);
+                                        delay(10);
+                                        lastVsyncLock = millis();
+                                    }
+                                    externalClockGenSyncInOutRate();
                                 }
-                                externalClockGenSyncInOutRate();
                             }
                         }
                         /*else {

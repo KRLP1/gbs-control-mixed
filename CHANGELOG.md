@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.7.7] – Frame-Time-Lock clock drift on 240p/480i switch
+
+### Fixed
+
+- **Clock drift when switching between 240p and 480i while
+  Frame-Time-Lock is active**: the preset switch path reset the
+  lock and re-ran the coarse clock match unconditionally, which
+  stepped the external clock generator by up to ±25 kHz per switch
+  and let the output rate drift further from the source rate with
+  every switch. Both `FrameSync::reset()` and
+  `externalClockGenSyncInOutRate()` are now skipped while the lock
+  is ready (`uopt->enableFrameTimeLock && rto->extClockGenDetected
+  && FrameSync::frequencyReady()`); anything else keeps the old
+  behaviour. Tested on Wii in Bob mode.
+  (Ported from brisma/gbsc-pro, issue #78.)
+
+### Changed
+
+- `FIRMWARE_VERSION` bumped to `v1.7.7`.
+
 ## [v1.7.6] – filesystem/dir backup completeness, dead code removal, comment translation
 
 ### Fixed
